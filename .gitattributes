@@ -1,0 +1,10 @@
+# Release hygiene — `git archive HEAD` builds the install zip, so every tracked
+# path lands in the package unless it is export-ignore'd here.
+#
+# Verify with:  git check-attr export-ignore -- <path>
+
+docs                  export-ignore
+.github               export-ignore
+.moodle-plugin-ci.yml export-ignore
+.gitignore            export-ignore
+.gitattributes        export-ignore
