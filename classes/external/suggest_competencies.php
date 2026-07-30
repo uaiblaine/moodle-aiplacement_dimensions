@@ -166,7 +166,15 @@ class suggest_competencies extends external_api {
              * learn which frameworks exist in categories they cannot see. The sibling
              * local_dimensions picker collapses the same two cases for the same reason.
              */
-            throw new \moodle_exception('error_nosuchframework', 'aiplacement_dimensions');
+            throw new \moodle_exception(
+                'error_nosuchframework',
+                'aiplacement_dimensions',
+                '',
+                null,
+                $framework
+                    ? 'framework not readable in context ' . $framework->get('contextid')
+                    : 'no such framework id'
+            );
         }
 
         $trimmed = \core_text::substr($params['content'], 0, self::MAX_CONTENT);
