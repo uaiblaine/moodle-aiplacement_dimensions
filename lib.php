@@ -50,6 +50,21 @@ function aiplacement_dimensions_coursemodule_definition_after_data($formwrapper,
         return;
     }
 
+    /*
+     * The placement's own on/off toggle, set at Site administration -> AI -> AI placements.
+     * This is a different switch from is_action_enabled() below: \core_ai\manager::
+     * is_action_enabled() (ai/classes/manager.php) only ever reads the per-action config key,
+     * and never asks whether the placement PLUGIN itself is enabled. That plugin-level state
+     * is read here, separately, through \core\plugininfo\aiplacement::is_plugin_enabled()
+     * (lib/classes/plugininfo/aiplacement.php), which checks config key "enabled" on the
+     * aiplacement_dimensions component. Without this call, disabling the plugin in the admin
+     * UI had no effect at all: the button still rendered as long as the per-action toggle
+     * was on.
+     */
+    if (!\core\plugininfo\aiplacement::is_plugin_enabled('dimensions')) {
+        return;
+    }
+
     $manager = \core\di::get(\core_ai\manager::class);
     $actionclass = \core_ai\aiactions\generate_text::class;
 

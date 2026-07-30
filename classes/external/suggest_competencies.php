@@ -130,6 +130,23 @@ class suggest_competencies extends external_api {
 
         \core_competency\api::require_enabled();
 
+        /*
+         * The placement's own on/off toggle, set at Site administration -> AI -> AI placements.
+         * This is a DIFFERENT switch from the is_action_enabled() call just below it, and the
+         * two are easy to conflate. \core_ai\manager::is_action_enabled() (ai/classes/manager.php)
+         * reads only the per-action config key, keyed by the action class's own basename; it
+         * never asks whether the placement PLUGIN itself is enabled. That plugin-level state is
+         * checked here, separately, through \core\plugininfo\aiplacement::is_plugin_enabled()
+         * (lib/classes/plugininfo/aiplacement.php), which reads config key "enabled" on the
+         * aiplacement_dimensions component. Do not fold this back into the is_action_enabled()
+         * check below: they read different config, and dropping this call means disabling the
+         * plugin in the admin UI no longer disables this web service, only the per-action
+         * toggle would.
+         */
+        if (!\core\plugininfo\aiplacement::is_plugin_enabled('dimensions')) {
+            throw new \moodle_exception('error_actiondisabled', 'aiplacement_dimensions');
+        }
+
         $manager = \core\di::get(\core_ai\manager::class);
 
         if (!$manager->is_action_enabled('aiplacement_dimensions', generate_text::class)) {

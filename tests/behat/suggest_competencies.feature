@@ -5,6 +5,25 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
   I need the suggestion button to appear only when every gate allows it, and applying a suggestion
   to take effect only through the activity form's own save
 
+  # The Suggest -> Add selected -> Save path is NOT covered by Behat anywhere in this feature,
+  # on purpose. Making the model return a specific pick would require installing a mocked
+  # \core_ai\manager, and \core\di::set() cannot make that mock visible to the request that
+  # actually runs it: the Behat CLI process and the Selenium-driven site process the browser
+  # talks to are separate PHP processes, so a DI override made from a step definition never
+  # reaches suggest_competencies::execute() when it runs under the browser-driven request (see
+  # the "Don't use get_config ... between selenium and cli process" comment in
+  # lib/behat/lib.php for the same process boundary affecting another kind of shared state).
+  # Core hit this exact wall for its own AI placement and did not solve it either:
+  # ai/placement/courseassist/tests/behat/course_assist_features.feature never triggers an
+  # actual completion, and ai/tests/behat/behat_core_ai.php offers only provider enable/disable
+  # and action-configuration steps, none of them a response stub. Following that precedent, the
+  # single @javascript scenario below stops at the furthest point reachable without a live
+  # provider reply: the drawer opening and its pickers rendering. The suggest-and-apply path
+  # itself, including the save that turns an applied suggestion into a real module link, is
+  # covered at the service level by tests/external/suggest_competencies_test.php (PHPUnit,
+  # which runs in the same process as the code it tests, so its \core_ai\manager mock is
+  # genuinely in effect) plus manual verification.
+
   Background:
     Given the following "courses" exist:
       | fullname | shortname | category |
@@ -20,14 +39,12 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
       | assign   | Assignment | C1     | assign1  |
 
   Scenario: The button is absent when the placement is disabled
-    # This asserts the standard aiplacement on/off toggle (\core\plugininfo\aiplacement::is_plugin_enabled(),
-    # config key "enabled") is honoured. lib.php currently has no such check anywhere — unlike
-    # ai/placement/courseassist, whose utils.php::is_course_assist_available() calls
-    # is_plugin_enabled() explicitly before rendering its UI, aiplacement_dimensions_
-    # coursemodule_definition_after_data() only checks core_competency's own "enabled" config
-    # (a different, unrelated flag) and never consults its own plugin's enabled state. Written
-    # to match the intended admin control per the brief; if it fails at the "Then", the fix is
-    # a missing gate in lib.php (a Task 6/7 finding), not this test.
+    # This asserts the standard aiplacement on/off toggle (\core\plugininfo\aiplacement::
+    # is_plugin_enabled(), config key "enabled") is honoured, mirroring core's own coverage of
+    # the same gate for its placement (ai/placement/courseassist/tests/behat/
+    # course_assist_features.feature:53, "AI features are not available if placement is not
+    # enabled"). lib.php checks this explicitly, immediately before its is_action_enabled()
+    # check (aiplacement_dimensions_coursemodule_definition_after_data()).
     Given the following config values are set as admin:
       | enabled | 0 | aiplacement_dimensions |
     When I log in as "teacher1"
@@ -56,8 +73,8 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
     # (see aiplacement_dimensions_coursemodule_definition_after_data()). This proves the same
     # gates that hide the button on an existing activity's edit page also hide it on the
     # add-activity page, where every capability and is_action_enabled_in_context() check runs
-    # against a course context instead of a module context. Subject to the same caveat as the
-    # very first scenario in this file: this config key is not currently read anywhere in lib.php.
+    # against a course context instead of a module context — including the plugin-enabled gate
+    # asserted by the very first scenario in this file.
     Given the following config values are set as admin:
       | enabled | 0 | aiplacement_dimensions |
     When I log in as "teacher1"
@@ -66,68 +83,27 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
     Then "Suggest competencies with AI" "button" should not exist
 
   @javascript
-  Scenario: Applying a suggestion links the competency once the form is saved
-    # The plugin never writes the module competency link itself: tool_lp_coursemodule_edit_post_actions
-    # (admin/tool/lp/lib.php) diffs the submitted form against the module's existing competencies and
-    # would undo a link made while the form was still open. Applying a suggestion links the competency
-    # to the COURSE and pre-selects it in the form's own hidden competencies[] select; only the form's
-    # own save, handled entirely by core, is what actually creates the module link. Stopping this
-    # scenario at "Add selected" would prove nothing about that path, so it saves and reopens the form.
-    # lib.php's own button-rendering gate (aiplacement_dimensions_coursemodule_definition_after_data())
-    # calls the real, unmocked manager to check for an enabled provider — the mock below only ever
-    # substitutes what process_action() returns, so a real provider record is still required for the
-    # button to render at all. Configured the same way ai/placement/courseassist's own Behat coverage
-    # does it (ai/placement/courseassist/tests/behat/course_assist_features.feature).
+  Scenario: The picker renders the framework select and its branch competencies
+    # This is the furthest point reachable without a live provider reply — see the feature
+    # header for why the suggest-and-apply path is not exercised here. Opening the drawer and
+    # populating its pickers calls only core_competency_list_competency_frameworks and
+    # local_dimensions_browse_structure (amd/src/suggest.js), both real webservices that need
+    # no AI provider response. A real, enabled provider is still required for the button to
+    # render at all: lib.php's own gate (aiplacement_dimensions_coursemodule_definition_
+    # after_data()) calls the real, unmocked manager to check for one before it draws the button.
     Given the following "core_ai > ai providers" exist:
       | provider          | name            | enabled | apikey | orgid |
       | aiprovider_openai | OpenAI API test | 1       | 123    | abc   |
-    And a mocked AI provider returns competency pick 1
-    And the AI acceptable use policy has been accepted by "teacher1"
     And the following "core_competency > frameworks" exist:
       | shortname | idnumber |
       | Framework | fw1      |
     And the following "core_competency > competencies" exist:
       | shortname | idnumber | competencyframework |
       | Root      | root1    | fw1                 |
-      | Alpha     | alpha1   | fw1                 |
     When I log in as "teacher1"
     And I am on the "Assignment" "assign activity editing" page
     And I press "Suggest competencies with AI"
-    And I select "Framework" from the "Competency framework" singleselect
-    And I press "Suggest"
-    # candidates are fetched "shortname ASC" (classes/local/candidates.php), so with "Alpha" and
-    # "Root" in scope, pick 1 resolves to "Alpha" — and the suggestions.mustache checkbox for it is
-    # checked by default, so no click is needed before applying it.
-    And I press "Add selected"
-    And I press "Save and return to course"
-    And I am on the "Assignment" "assign activity editing" page
-    Then I should see "Alpha" in the "#id_competenciessectioncontainer" "css_element"
-
-  @javascript
-  Scenario: Suggestions work on an activity that has never been saved
-    # The design this plugin replaced could not offer suggestions before the activity itself was
-    # saved. This design can, because it links to the course rather than the module — proved here
-    # end to end, on an activity that is only ever created once, by this scenario's own save.
-    Given the following "core_ai > ai providers" exist:
-      | provider          | name            | enabled | apikey | orgid |
-      | aiprovider_openai | OpenAI API test | 1       | 123    | abc   |
-    And a mocked AI provider returns competency pick 1
-    And the AI acceptable use policy has been accepted by "teacher1"
-    And the following "core_competency > frameworks" exist:
-      | shortname | idnumber |
-      | Framework | fw1      |
-    And the following "core_competency > competencies" exist:
-      | shortname | idnumber | competencyframework |
-      | Alpha     | alpha1   | fw1                 |
-    When I log in as "teacher1"
-    And I am on "Course 1" course homepage with editing mode on
-    And I add a "Page" to section "1"
-    And I set the field "Name" to "Brand new page"
-    And I set the field "Description" to "Teaches the Alpha competency."
-    And I press "Suggest competencies with AI"
-    And I select "Framework" from the "Competency framework" singleselect
-    And I press "Suggest"
-    And I press "Add selected"
-    And I press "Save and return to course"
-    And I am on the "Brand new page" "page activity editing" page
-    Then I should see "Alpha" in the "#id_competenciessectioncontainer" "css_element"
+    Then "#aiplacement-dimensions-framework" "css_element" should exist
+    And I should see "Framework" in the "#aiplacement-dimensions-framework" "css_element"
+    And "[data-region='branch']" "css_element" should exist
+    And I should see "Root" in the ".aiplacement-dimensions-pickers" "css_element"

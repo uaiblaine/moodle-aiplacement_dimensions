@@ -84,9 +84,20 @@ final class suggest_competencies_test extends \advanced_testcase {
     /**
      * Build a course, module, framework and one competency.
      *
+     * Also baselines the placement's own plugin toggle to enabled: unlike a real site,
+     * where an admin has already turned the placement on, a fresh PHPUnit environment
+     * leaves config key "enabled" on the aiplacement_dimensions component completely
+     * unset, and \core\plugininfo\aiplacement::is_plugin_enabled() treats that as off
+     * (ai/placement/courseassist/tests/external/explain_text_test.php:34 does the same
+     * for its own plugin, for the same reason). Every test that expects the call to
+     * reach past that gate relies on this baseline; test_execute_honours_plugin_toggle()
+     * is the one place that deliberately turns it back off again.
+     *
      * @return array Keys: course, cmid, frameworkid, competencyid, context.
      */
     private function scenario(): array {
+        set_config('enabled', 1, 'aiplacement_dimensions');
+
         $course = $this->getDataGenerator()->create_course();
         $module = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
         $generator = $this->getDataGenerator()->get_plugin_generator('core_competency');
@@ -334,6 +345,36 @@ final class suggest_competencies_test extends \advanced_testcase {
         $mock->method('is_action_enabled')->willReturn(false);
         $mock->method('is_action_enabled_in_context')->willReturn(true);
         \core\di::set(\core_ai\manager::class, fn() => $mock);
+
+        $result = $this->call($scenario);
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_actiondisabled', $result['exception']->errorcode);
+    }
+
+    /**
+     * The placement's own PLUGIN toggle (Site administration -> AI -> AI placements) is
+     * honoured. This is a different switch from the one covered by
+     * test_execute_honours_action_toggle(): \core\plugininfo\aiplacement::is_plugin_enabled()
+     * reads config key "enabled" on the aiplacement_dimensions component itself, while
+     * is_action_enabled() reads a per-action key. Nothing here mocks that plugin-level
+     * check, because it is not reached through the DI container; it is set directly with
+     * set_config(), the same way the admin UI would change it.
+     *
+     * The manager mock leaves every OTHER gate open (enabled action, enabled context,
+     * a successful provider response) so that a red run of this test alone pins the
+     * failure on the plugin toggle just added, not on some other rejection.
+     *
+     * @return void
+     */
+    public function test_execute_honours_plugin_toggle(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $scenario = $this->scenario();
+        $this->accept_policy($scenario['context']);
+        $this->mock_manager('{"picks":[{"n":1,"confidence":0.7,"why":"covers it"}]}');
+
+        set_config('enabled', 0, 'aiplacement_dimensions');
 
         $result = $this->call($scenario);
 
