@@ -40,6 +40,26 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
     And the following "activities" exist:
       | activity | name       | course | idnumber |
       | assign   | Assignment | C1     | assign1  |
+    # Both of the rows below are the baseline every scenario in this feature is measured
+    # against, mirroring core's own Background for the same kind of gate (ai/placement/
+    # courseassist/tests/behat/course_assist_features.feature:29-33): a provider, so
+    # get_providers_for_actions() is non-empty, and the placement's own admin toggle turned on.
+    # Without both, lib.php's gate (aiplacement_dimensions_coursemodule_definition_after_data())
+    # returns before the button is ever drawn, and every "should not exist" scenario below would
+    # pass regardless of whether the gate it claims to test was reached at all.
+    And the following "core_ai > ai providers" exist:
+      | provider          | name            | enabled | apikey | orgid |
+      | aiprovider_openai | OpenAI API test | 1       | 123    | abc   |
+    And the following config values are set as admin:
+      | enabled | 1 | aiplacement_dimensions |
+
+  Scenario: The button is present when every gate allows it
+    # The positive case every negative scenario below is a single deviation from: nothing here
+    # overrides the Background, so every gate (provider present, placement enabled, capability,
+    # course and activity AI toggles) is left open.
+    When I log in as "teacher1"
+    And I am on the "Assignment" "assign activity editing" page
+    Then "Suggest competencies with AI" "button" should exist
 
   Scenario: The button is absent when the placement is disabled
     # This asserts the standard aiplacement on/off toggle (\core\plugininfo\aiplacement::
@@ -47,7 +67,9 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
     # the same gate for its placement (ai/placement/courseassist/tests/behat/
     # course_assist_features.feature:53, "AI features are not available if placement is not
     # enabled"). lib.php checks this explicitly, immediately before its is_action_enabled()
-    # check (aiplacement_dimensions_coursemodule_definition_after_data()).
+    # check (aiplacement_dimensions_coursemodule_definition_after_data()). The single deviation
+    # from the positive scenario above is the override below; the Background's provider is
+    # otherwise untouched.
     Given the following config values are set as admin:
       | enabled | 0 | aiplacement_dimensions |
     When I log in as "teacher1"
@@ -55,6 +77,8 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
     Then "Suggest competencies with AI" "button" should not exist
 
   Scenario: The button is absent for a role that is prohibited
+    # The single deviation from the positive scenario is the permission override below; the
+    # Background's provider and enabled placement are otherwise untouched.
     Given the following "permission overrides" exist:
       | capability                     | permission | role           | contextlevel | reference |
       | aiplacement/dimensions:suggest | Prohibit   | editingteacher | Course       | C1        |
@@ -63,6 +87,8 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
     Then "Suggest competencies with AI" "button" should not exist
 
   Scenario: The button is absent when AI tools are disabled at course level
+    # The single deviation from the positive scenario is turning off the course-level AI
+    # toggle; the Background's provider and enabled placement are otherwise untouched.
     Given I log in as "teacher1"
     And I am on the "Course 1" "course editing" page
     When I set the following fields to these values:
@@ -77,7 +103,8 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
     # gates that hide the button on an existing activity's edit page also hide it on the
     # add-activity page, where every capability and is_action_enabled_in_context() check runs
     # against a course context instead of a module context — including the plugin-enabled gate
-    # asserted by the very first scenario in this file.
+    # asserted by the negative scenario above. The single deviation from the positive scenario
+    # is the same "enabled | 0" override, applied on the add-activity path instead.
     Given the following config values are set as admin:
       | enabled | 0 | aiplacement_dimensions |
     When I log in as "teacher1"
@@ -91,13 +118,10 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
     # header for why the suggest-and-apply path is not exercised here. Opening the drawer and
     # populating its pickers calls only core_competency_list_competency_frameworks and
     # local_dimensions_browse_structure (amd/src/suggest.js), both real webservices that need
-    # no AI provider response. A real, enabled provider is still required for the button to
-    # render at all: lib.php's own gate (aiplacement_dimensions_coursemodule_definition_
-    # after_data()) calls the real, unmocked manager to check for one before it draws the button.
-    Given the following "core_ai > ai providers" exist:
-      | provider          | name            | enabled | apikey | orgid |
-      | aiprovider_openai | OpenAI API test | 1       | 123    | abc   |
-    And the following "core_competency > frameworks" exist:
+    # no AI provider response. The provider and the placement toggle both come from the
+    # Background — the same baseline the positive scenario above already proved is enough for
+    # the button to render at all — so only the framework and its competency are added here.
+    Given the following "core_competency > frameworks" exist:
       | shortname | idnumber |
       | Framework | fw1      |
     And the following "core_competency > competencies" exist:
