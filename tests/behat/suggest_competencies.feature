@@ -19,10 +19,13 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
   # and action-configuration steps, none of them a response stub. Following that precedent, the
   # single @javascript scenario below stops at the furthest point reachable without a live
   # provider reply: the drawer opening and its pickers rendering. The suggest-and-apply path
-  # itself, including the save that turns an applied suggestion into a real module link, is
-  # covered at the service level by tests/external/suggest_competencies_test.php (PHPUnit,
-  # which runs in the same process as the code it tests, so its \core_ai\manager mock is
-  # genuinely in effect) plus manual verification.
+  # itself, including the save that turns an applied suggestion into a real module link, has
+  # no automated browser coverage, for the same process-boundary reason: a stubbed AI provider
+  # cannot reach the browser-driven site process from this Behat run. That path is covered at
+  # the service level by tests/external/suggest_competencies_test.php (PHPUnit, which runs in
+  # the same process as the code it tests, so its \core_ai\manager mock is genuinely in
+  # effect). The browser path itself remains unverified pending a run against a real site with
+  # a real AI provider.
 
   Background:
     Given the following "courses" exist:
