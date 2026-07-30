@@ -128,4 +128,48 @@ final class resolver_test extends \basic_testcase {
         $this->assertSame([], $result['suggestions']);
         $this->assertSame(0, $result['discarded']);
     }
+
+    /**
+     * A fenced payload surrounded by brace-bearing prose still resolves.
+     *
+     * The brace-slicing fallback alone would span from the first brace in the
+     * preamble to the last brace in the sign-off and decode nothing. The fence
+     * must be tried first so the genuine answer inside it is not lost.
+     *
+     * @return void
+     */
+    public function test_fenced_payload_with_brace_prose_resolves(): void {
+        $raw = "Sure, here is my analysis of the {activity} content.\n"
+             . "```json\n{\"picks\":[{\"n\":2,\"confidence\":0.8,\"why\":\"clear match\"}]}\n```\n"
+             . "Let me know if you need more detail {smile}.";
+        $result = resolver::resolve($raw, $this->candidates());
+
+        $this->assertSame(0, $result['discarded']);
+        $this->assertCount(1, $result['suggestions']);
+        $this->assertSame(22, $result['suggestions'][0]['id']);
+    }
+
+    /**
+     * An array-valued why is coerced to an empty string, never a PHP warning.
+     *
+     * @return void
+     */
+    public function test_array_why_yields_empty_string(): void {
+        $raw = '{"picks":[{"n":1,"why":{"unexpected":"object"}}]}';
+        $result = resolver::resolve($raw, $this->candidates());
+
+        $this->assertSame('', $result['suggestions'][0]['why']);
+    }
+
+    /**
+     * A non-numeric confidence falls back to the safe default.
+     *
+     * @return void
+     */
+    public function test_non_numeric_confidence_yields_zero(): void {
+        $raw = '{"picks":[{"n":1,"confidence":"high"}]}';
+        $result = resolver::resolve($raw, $this->candidates());
+
+        $this->assertSame(0.0, $result['suggestions'][0]['confidence']);
+    }
 }

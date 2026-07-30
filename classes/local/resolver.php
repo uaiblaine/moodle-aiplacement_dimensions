@@ -68,8 +68,12 @@ class resolver {
                 'id' => (int) $candidate['id'],
                 'idnumber' => (string) $candidate['idnumber'],
                 'shortname' => (string) $candidate['shortname'],
-                'confidence' => isset($pick['confidence']) ? (float) $pick['confidence'] : 0.0,
-                'why' => isset($pick['why']) ? clean_param((string) $pick['why'], PARAM_TEXT) : '',
+                'confidence' => isset($pick['confidence']) && is_numeric($pick['confidence'])
+                    ? (float) $pick['confidence']
+                    : 0.0,
+                'why' => isset($pick['why']) && is_scalar($pick['why'])
+                    ? clean_param((string) $pick['why'], PARAM_TEXT)
+                    : '',
             ];
         }
 
@@ -88,6 +92,19 @@ class resolver {
         $decoded = json_decode($text, true);
         if (is_array($decoded)) {
             return $decoded;
+        }
+
+        /*
+         * Prefer a fenced block. Models routinely wrap the JSON in prose, and that
+         * prose often contains its own braces, so the brace-slicing fallback below
+         * would span from a brace in the preamble to one in the sign-off and decode
+         * nothing. Extracting the fence first keeps a genuine answer readable.
+         */
+        if (preg_match('/```(?:[a-z]*)\s*(.+?)\s*```/is', $text, $matches)) {
+            $decoded = json_decode($matches[1], true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
         }
 
         $open = strpos($text, '{');
