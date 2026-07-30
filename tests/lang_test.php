@@ -36,7 +36,13 @@ final class lang_test extends \advanced_testcase {
 
         $root = $CFG->dirroot . '/ai/placement/dimensions';
         $patterns = [
-            '/\{\{#str\}\}\s*([a-z0-9_]+)\s*,\s*aiplacement_dimensions\s*\{\{\/str\}\}/i',
+            /*
+             * The optional (?:,.*?) tail matters: a {{#str}} call may carry an argument
+             * after the component, and this plugin uses that form three times. Without
+             * it the scanner silently skips those keys, and a test that cannot see a
+             * reference cannot prove the reference is defined.
+             */
+            '/\{\{#str\}\}\s*([a-z0-9_]+)\s*,\s*aiplacement_dimensions\s*(?:,.*?)?\{\{\/str\}\}/is',
             '/get_string\(\s*[\'"]([a-z0-9_:]+)[\'"]\s*,\s*[\'"]aiplacement_dimensions[\'"]/i',
             '/moodle_exception\(\s*[\'"]([a-z0-9_:]+)[\'"]\s*,\s*[\'"]aiplacement_dimensions[\'"]/i',
         ];
