@@ -57,7 +57,45 @@ final class candidates_test extends \advanced_testcase {
 
         $this->assertContains($child->get('id'), $ids);
         $this->assertContains($grandchild->get('id'), $ids, 'depth 3 must be reachable');
-        $this->assertNotContains($root->get('id'), $ids, 'the chosen root is scope, not a candidate');
+        $this->assertContains(
+            $root->get('id'),
+            $ids,
+            'a subtree includes its root: the chosen branch itself is a candidate too'
+        );
+    }
+
+    /**
+     * On a flat framework every competency sits at parentid 0, so a chosen root has
+     * no descendants at all. If the root were excluded from its own subtree, checking
+     * that root would return zero candidates and make the framework unusable through
+     * the picker, even though it has competencies.
+     *
+     * @return void
+     */
+    public function test_fetch_flat_framework_returns_the_chosen_root(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_competency');
+        $framework = $generator->create_framework();
+        $chosen = $generator->create_competency([
+            'competencyframeworkid' => $framework->get('id'),
+            'shortname' => 'Chosen',
+        ]);
+        $other = $generator->create_competency([
+            'competencyframeworkid' => $framework->get('id'),
+            'shortname' => 'Other',
+        ]);
+
+        $rows = candidates::fetch($framework->get('id'), [$chosen->get('id')]);
+        $ids = array_column($rows, 'id');
+
+        $this->assertContains(
+            $chosen->get('id'),
+            $ids,
+            'a flat root with no descendants must still return itself as a candidate'
+        );
+        $this->assertNotContains($other->get('id'), $ids, 'a sibling outside the chosen root is not in scope');
     }
 
     /**

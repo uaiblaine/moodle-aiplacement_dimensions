@@ -29,9 +29,12 @@ class candidates {
     /**
      * Fetch the competencies under the chosen roots.
      *
-     * The chosen roots define scope and are not themselves candidates. An empty
-     * root list means the whole framework. The full subtree is returned, at any
-     * depth: fetching only direct children makes deep frameworks unusable.
+     * A subtree includes its root: each chosen root is a candidate alongside its
+     * descendants, at any depth. An empty root list means the whole framework. The
+     * full subtree is returned, at any depth: fetching only direct children makes
+     * deep frameworks unusable, and excluding the root itself would leave a flat
+     * framework (everything at parentid = 0) with zero candidates whenever a
+     * branch is chosen, since a flat competency has no descendants at all.
      *
      * @param int $frameworkid The competency framework id.
      * @param array $rootids Competency ids whose subtrees are in scope.
@@ -56,6 +59,16 @@ class candidates {
             if (!$root) {
                 continue;
             }
+            /*
+             * get_descendants_ids() matches path LIKE '{path}{id}/%' (competency.php),
+             * which excludes the root itself by construction. A subtree includes its
+             * root, so it is added explicitly here. Without this line, checking any
+             * branch always sends strictly fewer competencies than checking none, and
+             * on a flat framework (every competency at parentid = 0, which has no
+             * descendants) checking a branch yields zero candidates and makes the
+             * framework unusable through the picker.
+             */
+            $ids[] = (int) $root->get('id');
             $ids = array_merge($ids, competency::get_descendants_ids($root));
         }
 
