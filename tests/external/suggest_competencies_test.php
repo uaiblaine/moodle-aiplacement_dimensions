@@ -373,6 +373,7 @@ final class suggest_competencies_test extends \advanced_testcase {
         $result = $this->call($scenario);
 
         $this->assertTrue($result['error']);
+        $this->assertSame('error_nosuchframework', $result['exception']->errorcode);
     }
 
     /**
