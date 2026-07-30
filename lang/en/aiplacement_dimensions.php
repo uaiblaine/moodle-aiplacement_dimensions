@@ -28,6 +28,7 @@ $string['appliedheading'] = 'Added to the course and selected below. Save the fo
 $string['applybutton'] = 'Add selected';
 $string['brancheslabel'] = 'Limit to these branches';
 $string['branchestruncated'] = 'Showing {$a->shown} of {$a->total} root competencies.';
+$string['contenttruncatednotice'] = 'The activity content was long, so only the first part of it was sent to the model.';
 $string['dimensions:suggest'] = 'Suggest competencies with AI';
 $string['discardednotice'] = 'The model returned {$a} answer(s) that could not be matched to a competency.';
 $string['error_actiondisabled'] = 'AI competency suggestions are turned off for this activity or course.';

@@ -24,6 +24,8 @@
         "suggestions": [{"id": 5, "idnumber": "K5", "shortname": "Alpha", "confidence": 0.8,
                          "why": "covers it", "json": "{}"}],
         "discarded": 0,
+        "contenttruncated": false,
+        "nocandidates": false,
         "truncated": false,
         "candidatecount": 12,
         "sentcount": 12
@@ -40,6 +42,12 @@
         {{#str}} discardednotice, aiplacement_dimensions, {{discarded}} {{/str}}
     </div>
 {{/discarded}}
+
+{{#contenttruncated}}
+    <div class="alert alert-warning" role="status">
+        {{#str}} contenttruncatednotice, aiplacement_dimensions {{/str}}
+    </div>
+{{/contenttruncated}}
 
 {{#undecodable}}
     <div class="alert alert-danger" role="alert">
@@ -69,6 +77,11 @@
 
 {{^suggestions.length}}
     {{^undecodable}}
-        <p class="text-muted">{{#str}} nosuggestions, aiplacement_dimensions {{/str}}</p>
+        {{#nocandidates}}
+            <p class="text-muted">{{#str}} nocandidates, aiplacement_dimensions {{/str}}</p>
+        {{/nocandidates}}
+        {{^nocandidates}}
+            <p class="text-muted">{{#str}} nosuggestions, aiplacement_dimensions {{/str}}</p>
+        {{/nocandidates}}
     {{/undecodable}}
 {{/suggestions.length}}

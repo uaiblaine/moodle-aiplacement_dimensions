@@ -267,6 +267,13 @@ function(Ajax, Templates, Notification, Str) {
                 discarded: response.discarded,
                 undecodable: response.undecodable,
                 contenttruncated: response.contenttruncated,
+                /*
+                 * A candidatecount of 0 is exactly and only the "nothing was ever in
+                 * scope" case: the service returns before calling the provider. Without
+                 * this flag the template would tell the user the model found no clear
+                 * match, when no model was consulted at all.
+                 */
+                nocandidates: response.candidatecount === 0,
                 truncated: response.truncated,
                 candidatecount: response.candidatecount,
                 sentcount: response.suggestions.length
@@ -336,7 +343,7 @@ function(Ajax, Templates, Notification, Str) {
     };
 
     /**
-     * Report the outcome under the competencies field.
+     * Report the outcome by replacing the drawer body.
      *
      * The form-autocomplete widget that renders the visible chips for the
      * competencies select has no listener for external changes to the select,
@@ -344,9 +351,15 @@ function(Ajax, Templates, Notification, Str) {
      * already-enhanced select is a no-op: it checks originalSelect.data('enhanced')
      * and returns immediately (lib/amd/src/form-autocomplete.js:1184-1189), before
      * it would ever refresh the chip list. So the chips are left exactly as they
-     * were; this notice is the only feedback the user gets until they reload the
-     * page or save the form, and the applied competencies are still correctly
-     * present in the select's option list either way.
+     * were, and the applied competencies are still correctly present in the
+     * select's option list either way.
+     *
+     * The notice replaces the drawer body rather than being inserted after the
+     * launch button. Inserting after meant a user scrolled down a long
+     * suggestion list might never see the confirmation, and a second Apply
+     * stacked a duplicate notice. Replacing keeps the result where the user is
+     * already looking and makes a repeat click impossible, since the Apply
+     * button goes away with the list it belonged to.
      *
      * @param {Array} results The outcome records from applyPicks.
      * @return {Promise} Resolves once the notice is rendered.
@@ -364,8 +377,7 @@ function(Ajax, Templates, Notification, Str) {
                 return r.pick;
             })
         }).then(function(rendered) {
-            var host = document.querySelector('.aiplacement-dimensions-launch');
-            host.insertAdjacentHTML('afterend', rendered.html);
+            document.querySelector(SELECTORS.BODY).innerHTML = rendered.html;
             Templates.runTemplateJS(rendered.js);
             return rendered;
         });
