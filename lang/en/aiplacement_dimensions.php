@@ -24,11 +24,13 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+$string['brancheslabel'] = 'Limit to these branches';
 $string['dimensions:suggest'] = 'Suggest competencies with AI';
 $string['error_actiondisabled'] = 'AI competency suggestions are turned off for this activity or course.';
 $string['error_nosuchframework'] = 'That competency framework is not available.';
 $string['error_policynotaccepted'] = 'You need to accept the AI acceptable use policy before asking for suggestions.';
 $string['error_toomanyroots'] = 'Too many competency branches were selected at once.';
+$string['frameworklabel'] = 'Competency framework';
 $string['pluginname'] = 'AI competency suggestions';
 $string['privacy:metadata'] = 'The AI competency suggestions placement does not store any personal data. Activity content is sent to the configured AI provider, which records the request under the core AI subsystem.';
 $string['promptinstruction'] = 'You are mapping educational content to competencies.
@@ -48,3 +50,5 @@ Rules:
 3) If you are not confident a competency genuinely applies, leave it out.
 4) Return {"picks": []} if nothing clearly applies. An empty answer is a valid and useful answer.
 5) "confidence" is between 0 and 1. "why" is one short sentence naming the evidence in the content.';
+$string['runbutton'] = 'Suggest';
+$string['suggestbutton'] = 'Suggest competencies with AI';
