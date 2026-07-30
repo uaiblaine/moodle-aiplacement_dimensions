@@ -211,12 +211,56 @@ function(Ajax, Templates, Notification, Str) {
     };
 
     /**
+     * Build the aiplacement_dimensions/suggestions template context shared by the
+     * success and provider-failure paths of runSuggestion().
+     *
+     * Rendering both paths through the same template, rather than the failure path
+     * building its own ad hoc error markup, is what lets a provider failure still
+     * surface the truncation and content-truncation notices: the request content was
+     * genuinely cut, or the candidate list genuinely truncated, before the call that
+     * then failed, and the user should still be told that.
+     *
+     * @param {Object} response The web service response.
+     * @return {Object} The template context for aiplacement_dimensions/suggestions.
+     */
+    var buildSuggestionsContext = function(response) {
+        return {
+            suggestions: (response.suggestions || []).map(function(suggestion) {
+                return Object.assign({}, suggestion, {json: JSON.stringify(suggestion)});
+            }),
+            discarded: response.discarded,
+            undecodable: response.undecodable,
+            contenttruncated: response.contenttruncated,
+            /*
+             * A candidatecount of 0 is exactly and only the "nothing was ever in
+             * scope" case: the service returns before calling the provider. Without
+             * this flag the template would tell the user the model found no clear
+             * match, when no model was consulted at all.
+             */
+            nocandidates: response.candidatecount === 0,
+            truncated: response.truncated,
+            candidatecount: response.candidatecount,
+            sentcount: response.sentcount,
+            // True only on a provider failure; suppresses the "no suggestions" text
+            // so the template's own error region (populated below) is what shows.
+            providererror: !response.success
+        };
+    };
+
+    /**
      * Ask the model and render the resolved suggestions.
      *
      * Bumps suggestRequestToken and only writes to the DOM if no later Suggest
      * click has started in the meantime, for the same reason reloadBranches()
      * guards itself: nothing here disables the Run button while the request is
      * in flight, so a second click before the first response lands is a real race.
+     *
+     * On a provider failure, the message shown is the provider's own errormessage
+     * when the service returned one (e.g. the translated core_ai default message,
+     * ai/classes/manager.php:156-160, on a fresh install with no provider
+     * configured), falling back to the generic error_provider string only when
+     * errormessage is empty. The text is always written with textContent, never
+     * innerHTML, since it can carry provider-supplied content.
      *
      * @param {Number} cmId The course module id, or 0 for an activity not yet created.
      * @param {Number} courseId The course id.
@@ -247,42 +291,40 @@ function(Ajax, Templates, Notification, Str) {
                 return response;
             }
 
-            if (!response.success) {
-                return Str.get_string('error_provider', 'aiplacement_dimensions', response.errorcode)
-                    .then(function(message) {
-                        if (token !== suggestRequestToken) {
-                            return response;
-                        }
-                        var body = document.querySelector(SELECTORS.BODY);
-                        body.innerHTML = '<div class="alert alert-danger" role="alert"></div>';
-                        body.querySelector('.alert').textContent = message;
-                        return response;
-                    });
+            var messagePromise;
+            if (response.success) {
+                messagePromise = Promise.resolve('');
+            } else if (response.errormessage) {
+                messagePromise = Promise.resolve(response.errormessage);
+            } else {
+                messagePromise = Str.get_string('error_provider', 'aiplacement_dimensions', response.errorcode);
             }
 
-            return Templates.renderForPromise('aiplacement_dimensions/suggestions', {
-                suggestions: response.suggestions.map(function(suggestion) {
-                    return Object.assign({}, suggestion, {json: JSON.stringify(suggestion)});
-                }),
-                discarded: response.discarded,
-                undecodable: response.undecodable,
-                contenttruncated: response.contenttruncated,
-                /*
-                 * A candidatecount of 0 is exactly and only the "nothing was ever in
-                 * scope" case: the service returns before calling the provider. Without
-                 * this flag the template would tell the user the model found no clear
-                 * match, when no model was consulted at all.
-                 */
-                nocandidates: response.candidatecount === 0,
-                truncated: response.truncated,
-                candidatecount: response.candidatecount,
-                sentcount: response.suggestions.length
+            // Captured by both .then() below so the second can use what the first resolved,
+            // without nesting one promise chain inside another.
+            var errormessage = '';
+
+            return messagePromise.then(function(resolvedmessage) {
+                errormessage = resolvedmessage;
+                return Templates.renderForPromise(
+                    'aiplacement_dimensions/suggestions',
+                    buildSuggestionsContext(response)
+                );
             }).then(function(rendered) {
                 if (token !== suggestRequestToken) {
                     return rendered;
                 }
-                document.querySelector(SELECTORS.BODY).innerHTML = rendered.html;
+                var body = document.querySelector(SELECTORS.BODY);
+                body.innerHTML = rendered.html;
                 Templates.runTemplateJS(rendered.js);
+                if (!response.success) {
+                    var errorRegion = body.querySelector(
+                        '[data-region="aiplacement-dimensions-providererror"]'
+                    );
+                    if (errorRegion) {
+                        errorRegion.textContent = errormessage;
+                    }
+                }
                 return rendered;
             });
         });

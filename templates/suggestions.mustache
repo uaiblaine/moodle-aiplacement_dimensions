@@ -19,6 +19,14 @@
 
     The resolved suggestions, plus the discard and truncation notices.
 
+    providererror is true only when the model provider call itself failed (a network,
+    quota or configuration error, as opposed to the model answering with nothing). The
+    caller populates the empty alert below with the provider's error message via
+    textContent, since that text is provider-supplied and must never be interpolated
+    as markup. It also suppresses the "no suggestions" paragraph further down, which
+    would otherwise misreport a provider failure as "the model looked and found
+    nothing".
+
     Example context (json):
     {
         "suggestions": [{"id": 5, "idnumber": "K5", "shortname": "Alpha", "confidence": 0.8,
@@ -28,9 +36,15 @@
         "nocandidates": false,
         "truncated": false,
         "candidatecount": 12,
-        "sentcount": 12
+        "sentcount": 12,
+        "providererror": false
     }
 }}
+{{#providererror}}
+    <div class="alert alert-danger aiplacement-dimensions-provider-error" role="alert"
+         data-region="aiplacement-dimensions-providererror"></div>
+{{/providererror}}
+
 {{#truncated}}
     <div class="alert alert-warning" role="status">
         {{#str}} truncatednotice, aiplacement_dimensions, {"sent": "{{sentcount}}", "total": "{{candidatecount}}"} {{/str}}
@@ -79,11 +93,13 @@
 
 {{^suggestions.length}}
     {{^undecodable}}
-        {{#nocandidates}}
-            <p class="text-muted">{{#str}} nocandidates, aiplacement_dimensions {{/str}}</p>
-        {{/nocandidates}}
-        {{^nocandidates}}
-            <p class="text-muted">{{#str}} nosuggestions, aiplacement_dimensions {{/str}}</p>
-        {{/nocandidates}}
+        {{^providererror}}
+            {{#nocandidates}}
+                <p class="text-muted">{{#str}} nocandidates, aiplacement_dimensions {{/str}}</p>
+            {{/nocandidates}}
+            {{^nocandidates}}
+                <p class="text-muted">{{#str}} nosuggestions, aiplacement_dimensions {{/str}}</p>
+            {{/nocandidates}}
+        {{/providererror}}
     {{/undecodable}}
 {{/suggestions.length}}
