@@ -28,19 +28,39 @@
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-define(['core/ajax', 'core/templates', 'core/notification'],
-function(Ajax, Templates, Notification) {
+define(['core/ajax', 'core/templates', 'core/notification', 'core/str'],
+function(Ajax, Templates, Notification, Str) {
 
     var SELECTORS = {
         LAUNCH: '[data-action="aiplacement-dimensions-suggest"]',
         CLOSE: '[data-action="aiplacement-dimensions-close"]',
         RUN: '[data-action="aiplacement-dimensions-run"]',
+        APPLY: '[data-action="aiplacement-dimensions-apply"]',
         DRAWER: '#aiplacement-dimensions-drawer',
         BODY: '#aiplacement-dimensions-drawer .aiplacement-dimensions-body',
         FRAMEWORK: '[data-region="framework"]',
         BRANCH: '[data-region="branch"]',
+        PICK: 'input[data-region="aiplacement-dimensions-pick"]',
         COMPETENCIES: 'select[name="competencies[]"]'
     };
+
+    /*
+     * Two monotonically increasing request tokens. Each guarded function bumps its
+     * own counter when it starts and captures that value; when its response
+     * arrives it only touches the DOM if the captured value still matches the
+     * counter, i.e. no newer call of the same kind has started since. This is
+     * what stops a slow, now-superseded response from overwriting what a later,
+     * faster response already rendered.
+     *
+     * branchRequestToken closes the gap the Task 6 review found in
+     * reloadBranches(): two rapid framework changes could let the slower
+     * response win and show one framework's branches under the other's
+     * selection. suggestRequestToken guards runSuggestion() the same way, since
+     * nothing disables the Suggest button while a request is in flight and a
+     * second click before the first response lands is the same race.
+     */
+    var branchRequestToken = 0;
+    var suggestRequestToken = 0;
 
     /**
      * Fetch the competency frameworks readable from the given context.
@@ -119,16 +139,27 @@ function(Ajax, Templates, Notification) {
      * leaving the framework select itself untouched so the user's choice and scroll
      * position survive the reload.
      *
+     * Bumps branchRequestToken and only writes to the DOM if no later call has
+     * started in the meantime, so two rapid framework changes can never let the
+     * slower response win and mismatch the select (see the module-level comment
+     * on the token variables).
+     *
      * @param {Number} frameworkId The competency framework id chosen in the select.
-     * @return {Promise} Resolves once the branch fieldset has been re-rendered.
+     * @return {Promise} Resolves once the branch fieldset has been re-rendered, or
+     *                    resolves without touching the DOM if superseded.
      */
     var reloadBranches = function(frameworkId) {
+        var token = ++branchRequestToken;
         return loadBranches(frameworkId).then(function(structure) {
             return Templates.renderForPromise(
                 'aiplacement_dimensions/pickers',
                 buildPickersContext([], structure.items, structure.total)
             );
         }).then(function(rendered) {
+            if (token !== branchRequestToken) {
+                // A newer framework change started while this request was in flight.
+                return rendered;
+            }
             var container = document.createElement('div');
             container.innerHTML = rendered.html;
             var newfieldset = container.querySelector('fieldset');
@@ -165,6 +196,181 @@ function(Ajax, Templates, Notification) {
         });
     };
 
+    /**
+     * Read the unsaved activity description from the form.
+     *
+     * @return {String} The content to classify.
+     */
+    var readContent = function() {
+        var textarea = document.querySelector('#id_introeditor, [name="intro[text]"]');
+        if (textarea && typeof textarea.value === 'string' && textarea.value.trim()) {
+            return textarea.value.trim();
+        }
+        var editable = document.querySelector('[id^="id_introeditor"][contenteditable="true"]');
+        return editable ? editable.textContent.trim() : '';
+    };
+
+    /**
+     * Ask the model and render the resolved suggestions.
+     *
+     * Bumps suggestRequestToken and only writes to the DOM if no later Suggest
+     * click has started in the meantime, for the same reason reloadBranches()
+     * guards itself: nothing here disables the Run button while the request is
+     * in flight, so a second click before the first response lands is a real race.
+     *
+     * @param {Number} cmId The course module id, or 0 for an activity not yet created.
+     * @param {Number} courseId The course id.
+     * @return {Promise} Resolves when the suggestions are rendered, or resolves
+     *                    without touching the DOM if superseded.
+     */
+    var runSuggestion = function(cmId, courseId) {
+        var token = ++suggestRequestToken;
+        var frameworkSelect = document.querySelector(SELECTORS.FRAMEWORK);
+        var branches = Array.prototype.slice.call(
+            document.querySelectorAll(SELECTORS.BRANCH + ':checked')
+        ).map(function(input) {
+            return parseInt(input.value, 10);
+        });
+
+        return Ajax.call([{
+            methodname: 'aiplacement_dimensions_suggest_competencies',
+            args: {
+                cmid: cmId,
+                courseid: courseId,
+                frameworkid: parseInt(frameworkSelect.value, 10),
+                rootids: branches,
+                content: readContent()
+            }
+        }])[0].then(function(response) {
+            if (token !== suggestRequestToken) {
+                // A newer Suggest click started while this request was in flight.
+                return response;
+            }
+
+            if (!response.success) {
+                return Str.get_string('error_provider', 'aiplacement_dimensions', response.errorcode)
+                    .then(function(message) {
+                        if (token !== suggestRequestToken) {
+                            return response;
+                        }
+                        var body = document.querySelector(SELECTORS.BODY);
+                        body.innerHTML = '<div class="alert alert-danger" role="alert"></div>';
+                        body.querySelector('.alert').textContent = message;
+                        return response;
+                    });
+            }
+
+            return Templates.renderForPromise('aiplacement_dimensions/suggestions', {
+                suggestions: response.suggestions.map(function(suggestion) {
+                    return Object.assign({}, suggestion, {json: JSON.stringify(suggestion)});
+                }),
+                discarded: response.discarded,
+                undecodable: response.undecodable,
+                contenttruncated: response.contenttruncated,
+                truncated: response.truncated,
+                candidatecount: response.candidatecount,
+                sentcount: response.suggestions.length
+            }).then(function(rendered) {
+                if (token !== suggestRequestToken) {
+                    return rendered;
+                }
+                document.querySelector(SELECTORS.BODY).innerHTML = rendered.html;
+                Templates.runTemplateJS(rendered.js);
+                return rendered;
+            });
+        });
+    };
+
+    /**
+     * Append a competency to the form's own competencies select.
+     *
+     * The form submits this select, not the visible chips, so appending here is
+     * what makes tool_lp create the module link on save. We never write the
+     * module link ourselves: tool_lp_coursemodule_edit_post_actions diffs this
+     * element and would remove anything absent from it.
+     *
+     * @param {Object} suggestion The resolved suggestion.
+     * @return {void}
+     */
+    var appendToForm = function(suggestion) {
+        var select = document.querySelector(SELECTORS.COMPETENCIES);
+        if (!select) {
+            return;
+        }
+        var existing = select.querySelector('option[value="' + suggestion.id + '"]');
+        if (existing) {
+            existing.selected = true;
+            return;
+        }
+        select.appendChild(new Option(suggestion.shortname, suggestion.id, true, true));
+    };
+
+    /**
+     * Link the checked suggestions to the course and select them in the form.
+     *
+     * @param {Number} courseId The course id.
+     * @return {Promise} Resolves with one outcome record per suggestion.
+     */
+    var applyPicks = function(courseId) {
+        var picks = Array.prototype.slice.call(
+            document.querySelectorAll(SELECTORS.PICK + ':checked')
+        ).map(function(input) {
+            return JSON.parse(input.dataset.suggestion);
+        });
+
+        /*
+         * One call per competency. A single Ajax.call batch aborts the
+         * remainder on the first exception, losing the rest silently.
+         */
+        return Promise.all(picks.map(function(pick) {
+            return Ajax.call([{
+                methodname: 'local_dimensions_link_competency_course',
+                args: {competencyid: pick.id, courseid: courseId}
+            }])[0].then(function() {
+                appendToForm(pick);
+                return {pick: pick, ok: true};
+            }).catch(function() {
+                return {pick: pick, ok: false};
+            });
+        }));
+    };
+
+    /**
+     * Report the outcome under the competencies field.
+     *
+     * The form-autocomplete widget that renders the visible chips for the
+     * competencies select has no listener for external changes to the select,
+     * and re-running core/form-autocomplete's enhanceField() on an
+     * already-enhanced select is a no-op: it checks originalSelect.data('enhanced')
+     * and returns immediately (lib/amd/src/form-autocomplete.js:1184-1189), before
+     * it would ever refresh the chip list. So the chips are left exactly as they
+     * were; this notice is the only feedback the user gets until they reload the
+     * page or save the form, and the applied competencies are still correctly
+     * present in the select's option list either way.
+     *
+     * @param {Array} results The outcome records from applyPicks.
+     * @return {Promise} Resolves once the notice is rendered.
+     */
+    var showOutcome = function(results) {
+        return Templates.renderForPromise('aiplacement_dimensions/applied', {
+            added: results.filter(function(r) {
+                return r.ok;
+            }).map(function(r) {
+                return r.pick;
+            }),
+            failed: results.filter(function(r) {
+                return !r.ok;
+            }).map(function(r) {
+                return r.pick;
+            })
+        }).then(function(rendered) {
+            var host = document.querySelector('.aiplacement-dimensions-launch');
+            host.insertAdjacentHTML('afterend', rendered.html);
+            Templates.runTemplateJS(rendered.js);
+            return rendered;
+        });
+    };
+
     return {
         /**
          * Initialise the placement.
@@ -191,6 +397,21 @@ function(Ajax, Templates, Notification) {
                 if (e.target.closest(SELECTORS.CLOSE)) {
                     e.preventDefault();
                     document.querySelector(SELECTORS.DRAWER).hidden = true;
+                    return;
+                }
+
+                if (e.target.closest(SELECTORS.RUN)) {
+                    e.preventDefault();
+                    runSuggestion(cmId, courseId).catch(Notification.exception);
+                    return;
+                }
+
+                if (e.target.closest(SELECTORS.APPLY)) {
+                    e.preventDefault();
+                    applyPicks(courseId).then(function(results) {
+                        return showOutcome(results);
+                    }).catch(Notification.exception);
+                    return;
                 }
             }, false);
 

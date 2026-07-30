@@ -1,0 +1,41 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template aiplacement_dimensions/applied
+
+    Outcome notice rendered under the competencies field after applying.
+
+    Example context (json):
+    {
+        "added": [{"id": 1, "shortname": "Alpha"}],
+        "failed": []
+    }
+}}
+<div class="aiplacement-dimensions-applied alert alert-info" role="status">
+    {{#added.length}}
+        <p class="mb-1">{{#str}} appliedheading, aiplacement_dimensions {{/str}}</p>
+        <ul class="mb-0">
+            {{#added}}<li>{{shortname}}</li>{{/added}}
+        </ul>
+    {{/added.length}}
+    {{#failed.length}}
+        <p class="mb-1 mt-2">{{#str}} failedheading, aiplacement_dimensions {{/str}}</p>
+        <ul class="mb-0">
+            {{#failed}}<li>{{shortname}}</li>{{/failed}}
+        </ul>
+    {{/failed.length}}
+</div>

@@ -24,14 +24,21 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+$string['appliedheading'] = 'Added to the course and selected below. Save the form to link them to this activity.';
+$string['applybutton'] = 'Add selected';
 $string['brancheslabel'] = 'Limit to these branches';
 $string['branchestruncated'] = 'Showing {$a->shown} of {$a->total} root competencies.';
 $string['dimensions:suggest'] = 'Suggest competencies with AI';
+$string['discardednotice'] = 'The model returned {$a} answer(s) that could not be matched to a competency.';
 $string['error_actiondisabled'] = 'AI competency suggestions are turned off for this activity or course.';
 $string['error_nosuchframework'] = 'That competency framework is not available.';
 $string['error_policynotaccepted'] = 'You need to accept the AI acceptable use policy before asking for suggestions.';
+$string['error_provider'] = 'The AI provider could not complete the request (code {$a}).';
 $string['error_toomanyroots'] = 'Too many competency branches were selected at once.';
+$string['failedheading'] = 'Could not be added:';
 $string['frameworklabel'] = 'Competency framework';
+$string['nocandidates'] = 'The competencies you chose have no sub-competencies to classify against.';
+$string['nosuggestions'] = 'The model did not find a clear match in this framework.';
 $string['pluginname'] = 'AI competency suggestions';
 $string['privacy:metadata'] = 'The AI competency suggestions placement does not store any personal data. Activity content is sent to the configured AI provider, which records the request under the core AI subsystem.';
 $string['promptinstruction'] = 'You are mapping educational content to competencies.
@@ -53,3 +60,5 @@ Rules:
 5) "confidence" is between 0 and 1. "why" is one short sentence naming the evidence in the content.';
 $string['runbutton'] = 'Suggest';
 $string['suggestbutton'] = 'Suggest competencies with AI';
+$string['truncatednotice'] = 'Only the first {$a->sent} of {$a->total} competencies were sent to the model.';
+$string['undecodablenotice'] = 'The AI provider replied, but its answer could not be read. Nothing was suggested. Try again.';

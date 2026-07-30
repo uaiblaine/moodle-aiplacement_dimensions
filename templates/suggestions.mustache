@@ -1,0 +1,74 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template aiplacement_dimensions/suggestions
+
+    The resolved suggestions, plus the discard and truncation notices.
+
+    Example context (json):
+    {
+        "suggestions": [{"id": 5, "idnumber": "K5", "shortname": "Alpha", "confidence": 0.8,
+                         "why": "covers it", "json": "{}"}],
+        "discarded": 0,
+        "truncated": false,
+        "candidatecount": 12,
+        "sentcount": 12
+    }
+}}
+{{#truncated}}
+    <div class="alert alert-warning" role="status">
+        {{#str}} truncatednotice, aiplacement_dimensions, {"sent": "{{sentcount}}", "total": "{{candidatecount}}"} {{/str}}
+    </div>
+{{/truncated}}
+
+{{#discarded}}
+    <div class="alert alert-warning" role="status">
+        {{#str}} discardednotice, aiplacement_dimensions, {{discarded}} {{/str}}
+    </div>
+{{/discarded}}
+
+{{#undecodable}}
+    <div class="alert alert-danger" role="alert">
+        {{#str}} undecodablenotice, aiplacement_dimensions {{/str}}
+    </div>
+{{/undecodable}}
+
+{{#suggestions.length}}
+    <ul class="list-unstyled aiplacement-dimensions-suggestions">
+        {{#suggestions}}
+            <li class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" checked
+                       id="aiplacement-dimensions-pick-{{id}}"
+                       data-region="aiplacement-dimensions-pick"
+                       data-suggestion="{{json}}">
+                <label class="form-check-label" for="aiplacement-dimensions-pick-{{id}}">
+                    <span class="fw-semibold">{{idnumber}}</span> {{shortname}}
+                    {{#why}}<span class="d-block text-muted small">{{why}}</span>{{/why}}
+                </label>
+            </li>
+        {{/suggestions}}
+    </ul>
+    <button type="button" class="btn btn-primary" data-action="aiplacement-dimensions-apply">
+        {{#str}} applybutton, aiplacement_dimensions {{/str}}
+    </button>
+{{/suggestions.length}}
+
+{{^suggestions.length}}
+    {{^undecodable}}
+        <p class="text-muted">{{#str}} nosuggestions, aiplacement_dimensions {{/str}}</p>
+    {{/undecodable}}
+{{/suggestions.length}}
