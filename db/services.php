@@ -28,7 +28,7 @@ $functions = [
     'aiplacement_dimensions_suggest_competencies' => [
         'classname' => 'aiplacement_dimensions\external\suggest_competencies',
         'description' => 'Suggest competencies for the given activity content.',
-        'type' => 'read',
+        'type' => 'write',
         'ajax' => true,
         'capabilities' => 'aiplacement/dimensions:suggest',
     ],

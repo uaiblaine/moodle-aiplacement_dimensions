@@ -20,6 +20,7 @@ use aiplacement_dimensions\local\candidates;
 use aiplacement_dimensions\local\prompt;
 use aiplacement_dimensions\local\resolver;
 use core_ai\aiactions\generate_text;
+use core_competency\competency_framework;
 use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_multiple_structure;
@@ -37,6 +38,9 @@ class suggest_competencies extends external_api {
     /** @var int Maximum characters of activity content sent to the model. */
     public const MAX_CONTENT = 20000;
 
+    /** @var int Maximum subtree roots a caller may scope a request to. */
+    public const MAX_ROOTS = 50;
+
     /**
      * Describe the parameters.
      *
@@ -44,7 +48,8 @@ class suggest_competencies extends external_api {
      */
     public static function execute_parameters(): external_function_parameters {
         return new external_function_parameters([
-            'contextid' => new external_value(PARAM_INT, 'Context id of the activity or course'),
+            'cmid' => new external_value(PARAM_INT, 'Course module id, or 0 for an activity not yet created'),
+            'courseid' => new external_value(PARAM_INT, 'Course id'),
             'frameworkid' => new external_value(PARAM_INT, 'Competency framework id'),
             'rootids' => new external_multiple_structure(
                 new external_value(PARAM_INT, 'Competency id whose subtree is in scope'),
@@ -59,95 +64,160 @@ class suggest_competencies extends external_api {
     /**
      * Suggest competencies.
      *
-     * @param int $contextid Context id.
+     * @param int $cmid Course module id, or 0 when the activity does not exist yet.
+     * @param int $courseid Course id.
      * @param int $frameworkid Competency framework id.
      * @param array $rootids Chosen subtree roots.
      * @param string $content Activity content.
      * @return array The structure described by execute_returns().
      */
-    public static function execute(int $contextid, int $frameworkid, array $rootids, string $content): array {
+    public static function execute(
+        int $cmid,
+        int $courseid,
+        int $frameworkid,
+        array $rootids,
+        string $content
+    ): array {
         global $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [
-            'contextid' => $contextid,
+            'cmid' => $cmid,
+            'courseid' => $courseid,
             'frameworkid' => $frameworkid,
             'rootids' => $rootids,
             'content' => $content,
         ]);
 
-        $context = \context::instance_by_id($params['contextid']);
+        if (count($params['rootids']) > self::MAX_ROOTS) {
+            throw new \moodle_exception('error_toomanyroots', 'aiplacement_dimensions');
+        }
+
+        /*
+         * The context is derived, never accepted from the caller. A caller-supplied
+         * contextid would make the AI opt-out gate a no-op the caller chooses: core's
+         * is_action_enabled_in_context() only consults a module's enabledaiactions at
+         * CONTEXT_MODULE, and returns true outright for levels outside course, category
+         * and module. Passing cmid means the per-activity check cannot be dodged.
+         */
+        if ($params['cmid'] > 0) {
+            $cm = get_coursemodule_from_id('', $params['cmid'], $params['courseid'], false, MUST_EXIST);
+            $context = \context_module::instance($cm->id);
+        } else {
+            $context = \context_course::instance($params['courseid'], MUST_EXIST);
+        }
+
         self::validate_context($context);
-        require_capability('aiplacement/dimensions:suggest', $context);
         require_capability('moodle/competency:coursecompetencymanage', $context);
+        require_capability('aiplacement/dimensions:suggest', $context);
+
+        \core_competency\api::require_enabled();
 
         $manager = \core\di::get(\core_ai\manager::class);
+
+        if (!$manager->is_action_enabled('aiplacement_dimensions', generate_text::class)) {
+            throw new \moodle_exception('error_actiondisabled', 'aiplacement_dimensions');
+        }
 
         if (!$manager->is_action_enabled_in_context($context, generate_text::class)) {
             throw new \moodle_exception('error_actiondisabled', 'aiplacement_dimensions');
         }
 
         /*
-         * Static, not an instance call: get_user_policy_status() is a public
-         * static method (ai/classes/manager.php:242) reading the core/ai_policy
-         * cache. It is therefore not reachable through the DI container, which
-         * is also why the test accepts the policy for real instead of mocking it.
+         * Static, not an instance call: get_user_policy_status() is a public static
+         * method (ai/classes/manager.php:242) reading the core/ai_policy cache. It is
+         * therefore not reachable through the DI container, which is also why the test
+         * accepts the policy for real instead of mocking it.
          */
         if (!\core_ai\manager::get_user_policy_status((int) $USER->id)) {
             throw new \moodle_exception('error_policynotaccepted', 'aiplacement_dimensions');
         }
 
+        /*
+         * The framework is authorized in its OWN context, not the activity's. Frameworks
+         * are context-scoped and every core read path checks that context; without this
+         * an editing teacher could name any framework id and have its competencies read
+         * and shipped to the provider, with candidatecount acting as an enumeration
+         * oracle. local_dimensions' own picker refuses such a framework, so omitting the
+         * check would gate this service more weakly than the UI that calls it.
+         */
+        $framework = competency_framework::get_record(['id' => $params['frameworkid']]);
+        if (!$framework) {
+            throw new \moodle_exception('error_nosuchframework', 'aiplacement_dimensions');
+        }
+        require_capability('moodle/competency:competencyview', $framework->get_context());
+
+        $trimmed = \core_text::substr($params['content'], 0, self::MAX_CONTENT);
+        $contenttruncated = \core_text::strlen($params['content']) > self::MAX_CONTENT;
+
         $rows = candidates::fetch($params['frameworkid'], $params['rootids']);
-        $built = prompt::build($rows, \core_text::substr($params['content'], 0, self::MAX_CONTENT));
+        $built = prompt::build($rows, $trimmed);
 
         if (empty($built['candidates'])) {
-            return self::empty_result($built);
+            return self::result(true, 0, '', [], 0, false, $contenttruncated, $built);
         }
 
         $action = new generate_text($context->id, (int) $USER->id, $built['text']);
         $response = $manager->process_action($action);
 
         if (!$response->get_success()) {
-            return [
-                'success' => false,
-                'errorcode' => $response->get_errorcode(),
-                'errormessage' => $response->get_errormessage(),
-                'suggestions' => [],
-                'discarded' => 0,
-                'undecodable' => false,
-                'candidatecount' => $built['candidatecount'],
-                'truncated' => $built['truncated'],
-            ];
+            return self::result(
+                false,
+                $response->get_errorcode(),
+                $response->get_errormessage(),
+                [],
+                0,
+                false,
+                $contenttruncated,
+                $built
+            );
         }
 
         $data = $response->get_response_data();
         $resolved = resolver::resolve((string) ($data['generatedcontent'] ?? ''), $built['candidates']);
 
-        return [
-            'success' => true,
-            'errorcode' => 0,
-            'errormessage' => '',
-            'suggestions' => $resolved['suggestions'],
-            'discarded' => $resolved['discarded'],
-            'undecodable' => $resolved['undecodable'],
-            'candidatecount' => $built['candidatecount'],
-            'truncated' => $built['truncated'],
-        ];
+        return self::result(
+            true,
+            0,
+            '',
+            $resolved['suggestions'],
+            $resolved['discarded'],
+            $resolved['undecodable'],
+            $contenttruncated,
+            $built
+        );
     }
 
     /**
-     * Build the result for a request with no candidates in scope.
+     * Assemble the return structure.
      *
+     * @param bool $success Whether the provider call succeeded.
+     * @param int $errorcode Provider error code, zero when successful.
+     * @param string $errormessage Provider error message.
+     * @param array $suggestions Resolved suggestions.
+     * @param int $discarded Model answers that could not be resolved.
+     * @param bool $undecodable Whether the model answer could not be parsed at all.
+     * @param bool $contenttruncated Whether the submitted content was cut to the cap.
      * @param array $built The output of prompt::build().
      * @return array The structure described by execute_returns().
      */
-    private static function empty_result(array $built): array {
+    private static function result(
+        bool $success,
+        int $errorcode,
+        string $errormessage,
+        array $suggestions,
+        int $discarded,
+        bool $undecodable,
+        bool $contenttruncated,
+        array $built
+    ): array {
         return [
-            'success' => true,
-            'errorcode' => 0,
-            'errormessage' => '',
-            'suggestions' => [],
-            'discarded' => 0,
-            'undecodable' => false,
+            'success' => $success,
+            'errorcode' => $errorcode,
+            'errormessage' => $errormessage,
+            'suggestions' => $suggestions,
+            'discarded' => $discarded,
+            'undecodable' => $undecodable,
+            'contenttruncated' => $contenttruncated,
             'candidatecount' => $built['candidatecount'],
             'truncated' => $built['truncated'],
         ];
@@ -175,6 +245,7 @@ class suggest_competencies extends external_api {
             ),
             'discarded' => new external_value(PARAM_INT, 'Model answers that could not be resolved'),
             'undecodable' => new external_value(PARAM_BOOL, 'True when the model answer could not be parsed at all'),
+            'contenttruncated' => new external_value(PARAM_BOOL, 'True when the submitted content was cut to the cap'),
             'candidatecount' => new external_value(PARAM_INT, 'Competencies in scope before truncation'),
             'truncated' => new external_value(PARAM_BOOL, 'Whether the candidate list was truncated'),
         ]);

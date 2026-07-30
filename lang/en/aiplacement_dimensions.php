@@ -26,7 +26,9 @@ defined('MOODLE_INTERNAL') || die();
 
 $string['dimensions:suggest'] = 'Suggest competencies with AI';
 $string['error_actiondisabled'] = 'AI competency suggestions are turned off for this activity or course.';
+$string['error_nosuchframework'] = 'That competency framework does not exist.';
 $string['error_policynotaccepted'] = 'You need to accept the AI acceptable use policy before asking for suggestions.';
+$string['error_toomanyroots'] = 'Too many competency branches were selected at once.';
 $string['pluginname'] = 'AI competency suggestions';
 $string['privacy:metadata'] = 'The AI competency suggestions placement does not store any personal data. Activity content is sent to the configured AI provider, which records the request under the core AI subsystem.';
 $string['promptinstruction'] = 'You are mapping educational content to competencies.
