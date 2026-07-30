@@ -16,6 +16,7 @@
 
 namespace aiplacement_dimensions\external;
 
+use aiplacement_dimensions\local\prompt;
 use core_ai\aiactions\generate_text;
 
 /**
@@ -256,6 +257,39 @@ final class suggest_competencies_test extends \advanced_testcase {
         ]);
 
         $this->assertTrue($result['data']['contenttruncated']);
+    }
+
+    /**
+     * A framework larger than the model's budget is truncated, and the response
+     * reports both the real total (candidatecount) and the number of competencies
+     * actually placed in the prompt (sentcount) — not the number of suggestions the
+     * model happened to return, which is what the client used to be given instead.
+     *
+     * @return void
+     */
+    public function test_execute_reports_sentcount_when_truncated(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $scenario = $this->scenario();
+        $this->accept_policy($scenario['context']);
+        $this->mock_manager('{"picks":[]}');
+
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_competency');
+        $framework = $generator->create_framework();
+        $total = prompt::DEFAULT_BUDGET + 5;
+        for ($i = 0; $i < $total; $i++) {
+            $generator->create_competency([
+                'competencyframeworkid' => $framework->get('id'),
+                'shortname' => 'Competency ' . $i,
+            ]);
+        }
+
+        $result = $this->call($scenario, ['frameworkid' => $framework->get('id')]);
+
+        $this->assertTrue($result['data']['success']);
+        $this->assertTrue($result['data']['truncated']);
+        $this->assertSame($total, $result['data']['candidatecount']);
+        $this->assertSame(prompt::DEFAULT_BUDGET, $result['data']['sentcount']);
     }
 
     /**

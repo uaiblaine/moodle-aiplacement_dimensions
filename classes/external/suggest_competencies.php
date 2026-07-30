@@ -268,6 +268,17 @@ class suggest_competencies extends external_api {
             'contenttruncated' => $contenttruncated,
             'candidatecount' => $built['candidatecount'],
             'truncated' => $built['truncated'],
+            /*
+             * The number of competencies actually placed in the prompt sent to the
+             * model, i.e. count($built['candidates']) after prompt::build() applied its
+             * budget. This is NOT the number of suggestions the model returned: a
+             * client cannot compute this value itself, because it never sees the
+             * candidate list, only the resolved suggestions. Without this field the
+             * truncation notice ("Only the first {$a->sent} of {$a->total}
+             * competencies were sent to the model") had nothing correct to report and
+             * was fed the suggestion count instead.
+             */
+            'sentcount' => count($built['candidates']),
         ];
     }
 
@@ -296,6 +307,7 @@ class suggest_competencies extends external_api {
             'contenttruncated' => new external_value(PARAM_BOOL, 'True when the submitted content was cut to the cap'),
             'candidatecount' => new external_value(PARAM_INT, 'Competencies in scope before truncation'),
             'truncated' => new external_value(PARAM_BOOL, 'Whether the candidate list was truncated'),
+            'sentcount' => new external_value(PARAM_INT, 'Competencies actually sent to the model'),
         ]);
     }
 }
