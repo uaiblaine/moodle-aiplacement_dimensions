@@ -34,7 +34,7 @@ class resolver {
      *
      * @param string $raw The model's generated content.
      * @param array $candidates The list returned by prompt::build(), in order.
-     * @return array Keys: suggestions (list), discarded (int).
+     * @return array Keys: suggestions (list), discarded (int), undecodable (bool).
      */
     public static function resolve(string $raw, array $candidates): array {
         $decoded = self::decode($raw);
@@ -77,43 +77,79 @@ class resolver {
             ];
         }
 
-        return ['suggestions' => $suggestions, 'discarded' => $discarded];
+        return [
+            'suggestions' => $suggestions,
+            'discarded' => $discarded,
+            'undecodable' => $decoded === null,
+        ];
     }
 
+    /** @var int Ceiling on brace-span attempts, so a brace-heavy answer cannot spin. */
+    private const MAX_SPANS = 20;
+
     /**
-     * Decode the model output, tolerating a surrounding code fence or prose.
+     * Decode the model output, tolerating fences and surrounding prose.
+     *
+     * Tries a list of candidate substrings in priority order and accepts the first
+     * that decodes to an array carrying a "picks" key. Requiring that key matters:
+     * a fenced code example can itself be valid JSON, and without the shape check a
+     * worked example would win over the real answer.
      *
      * @param string $raw The model's generated content.
-     * @return array Decoded payload, or an empty array when unreadable.
+     * @return array|null Decoded payload, or null when no payload could be found.
      */
-    private static function decode(string $raw): array {
-        $text = trim($raw);
-
-        $decoded = json_decode($text, true);
-        if (is_array($decoded)) {
-            return $decoded;
-        }
-
-        /*
-         * Prefer a fenced block. Models routinely wrap the JSON in prose, and that
-         * prose often contains its own braces, so the brace-slicing fallback below
-         * would span from a brace in the preamble to one in the sign-off and decode
-         * nothing. Extracting the fence first keeps a genuine answer readable.
-         */
-        if (preg_match('/```(?:[a-z]*)\s*(.+?)\s*```/is', $text, $matches)) {
-            $decoded = json_decode($matches[1], true);
-            if (is_array($decoded)) {
+    private static function decode(string $raw): ?array {
+        foreach (self::candidate_payloads($raw) as $candidate) {
+            $decoded = json_decode($candidate, true);
+            if (is_array($decoded) && array_key_exists('picks', $decoded)) {
                 return $decoded;
             }
         }
 
-        $open = strpos($text, '{');
-        $close = strrpos($text, '}');
-        if ($open === false || $close === false || $close <= $open) {
-            return [];
+        return null;
+    }
+
+    /**
+     * Build the candidate substrings that might hold the payload, best first.
+     *
+     * @param string $raw The model's generated content.
+     * @return array Candidate strings, in the order they should be tried.
+     */
+    private static function candidate_payloads(string $raw): array {
+        $text = trim($raw);
+        $candidates = [$text];
+
+        /*
+         * Every fenced block, not just the first: models put a worked example in one
+         * fence and the answer in another. The closing fence is anchored to its own
+         * line so a triple-backtick inside a string value cannot truncate the capture.
+         */
+        if (preg_match_all('/^```[a-z]*[ \t]*\R(.*?)\R```[ \t]*$/ims', $text, $matches)) {
+            foreach ($matches[1] as $block) {
+                $candidates[] = trim($block);
+            }
         }
 
-        $decoded = json_decode(substr($text, $open, $close - $open + 1), true);
-        return is_array($decoded) ? $decoded : [];
+        /*
+         * Last resort for unfenced JSON: every span from a brace to the final brace.
+         * Trying successive opening braces means a brace in the preamble no longer
+         * swallows the payload, because a later start eventually lands on it.
+         */
+        $close = strrpos($text, '}');
+        if ($close !== false) {
+            $offset = 0;
+            $tries = 0;
+            while ($tries < self::MAX_SPANS) {
+                $open = strpos($text, '{', $offset);
+                if ($open === false || $open >= $close) {
+                    break;
+                }
+                $candidates[] = substr($text, $open, $close - $open + 1);
+                $offset = $open + 1;
+                $tries++;
+            }
+        }
+
+        return $candidates;
     }
 }

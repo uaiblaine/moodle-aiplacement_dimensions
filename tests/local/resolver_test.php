@@ -47,6 +47,7 @@ final class resolver_test extends \basic_testcase {
         $raw = '{"picks":[{"n":2,"confidence":0.9,"why":"mentions Beta"}]}';
         $result = resolver::resolve($raw, $this->candidates());
 
+        $this->assertFalse($result['undecodable']);
         $this->assertSame(0, $result['discarded']);
         $this->assertCount(1, $result['suggestions']);
         $this->assertSame(22, $result['suggestions'][0]['id']);
@@ -64,6 +65,7 @@ final class resolver_test extends \basic_testcase {
         $raw = '{"picks":[{"n":1},{"n":9},{"n":0},{"n":-3}]}';
         $result = resolver::resolve($raw, $this->candidates());
 
+        $this->assertFalse($result['undecodable']);
         $this->assertCount(1, $result['suggestions']);
         $this->assertSame(3, $result['discarded']);
     }
@@ -77,6 +79,7 @@ final class resolver_test extends \basic_testcase {
         $raw = '{"picks":[{"n":1},{"n":1}]}';
         $result = resolver::resolve($raw, $this->candidates());
 
+        $this->assertFalse($result['undecodable']);
         $this->assertCount(1, $result['suggestions']);
         $this->assertSame(0, $result['discarded']);
     }
@@ -90,11 +93,12 @@ final class resolver_test extends \basic_testcase {
         $raw = "```json\n{\"picks\":[{\"n\":1}]}\n```";
         $result = resolver::resolve($raw, $this->candidates());
 
+        $this->assertFalse($result['undecodable']);
         $this->assertCount(1, $result['suggestions']);
     }
 
     /**
-     * Unparseable output is an empty answer, not an exception.
+     * Unparseable output is an empty answer, not an exception, and is flagged as such.
      *
      * @return void
      */
@@ -103,6 +107,7 @@ final class resolver_test extends \basic_testcase {
 
         $this->assertSame([], $result['suggestions']);
         $this->assertSame(0, $result['discarded']);
+        $this->assertTrue($result['undecodable']);
     }
 
     /**
@@ -113,6 +118,7 @@ final class resolver_test extends \basic_testcase {
     public function test_missing_optional_fields(): void {
         $result = resolver::resolve('{"picks":[{"n":1}]}', $this->candidates());
 
+        $this->assertFalse($result['undecodable']);
         $this->assertSame(0.0, $result['suggestions'][0]['confidence']);
         $this->assertSame('', $result['suggestions'][0]['why']);
     }
@@ -127,6 +133,7 @@ final class resolver_test extends \basic_testcase {
 
         $this->assertSame([], $result['suggestions']);
         $this->assertSame(0, $result['discarded']);
+        $this->assertFalse($result['undecodable']);
     }
 
     /**
@@ -144,6 +151,7 @@ final class resolver_test extends \basic_testcase {
              . "Let me know if you need more detail {smile}.";
         $result = resolver::resolve($raw, $this->candidates());
 
+        $this->assertFalse($result['undecodable']);
         $this->assertSame(0, $result['discarded']);
         $this->assertCount(1, $result['suggestions']);
         $this->assertSame(22, $result['suggestions'][0]['id']);
@@ -158,6 +166,7 @@ final class resolver_test extends \basic_testcase {
         $raw = '{"picks":[{"n":1,"why":{"unexpected":"object"}}]}';
         $result = resolver::resolve($raw, $this->candidates());
 
+        $this->assertFalse($result['undecodable']);
         $this->assertSame('', $result['suggestions'][0]['why']);
     }
 
@@ -170,6 +179,92 @@ final class resolver_test extends \basic_testcase {
         $raw = '{"picks":[{"n":1,"confidence":"high"}]}';
         $result = resolver::resolve($raw, $this->candidates());
 
+        $this->assertFalse($result['undecodable']);
         $this->assertSame(0.0, $result['suggestions'][0]['confidence']);
+    }
+
+    /**
+     * A literal triple-backtick inside the model's own "why" value must not truncate
+     * the fenced capture. The closing fence is recognised only when the backticks
+     * stand alone on their own line, so a mid-line backtick sequence inside a JSON
+     * string value is not mistaken for the real closing fence.
+     *
+     * @return void
+     */
+    public function test_fenced_why_with_triple_backtick_resolves(): void {
+        $raw = "Here is my analysis of the {content} provided.\n"
+             . "```json\n"
+             . "{\"picks\":[{\"n\":1,\"confidence\":0.75,\"why\":\"uses ``` in a code sample\"}]}\n"
+             . "```\n"
+             . "Let me know if you need more {detail}.";
+        $result = resolver::resolve($raw, $this->candidates());
+
+        $this->assertFalse($result['undecodable']);
+        $this->assertSame(0, $result['discarded']);
+        $this->assertCount(1, $result['suggestions']);
+        $this->assertSame(11, $result['suggestions'][0]['id']);
+        $this->assertSame('uses ``` in a code sample', $result['suggestions'][0]['why']);
+    }
+
+    /**
+     * Two fenced blocks: a worked PHP example first, the real answer second. Only
+     * trying the first fence (as the previous implementation did) would capture the
+     * example and fall through to a brace-slicing fallback that also fails.
+     *
+     * @return void
+     */
+    public function test_second_of_two_fenced_blocks_resolves(): void {
+        $raw = "Here is a helper function first:\n"
+             . "```php\n"
+             . "function example() {\n"
+             . "    return true;\n"
+             . "}\n"
+             . "```\n"
+             . "And here is the actual answer:\n"
+             . "```json\n"
+             . "{\"picks\":[{\"n\":2,\"confidence\":0.6,\"why\":\"second fence\"}]}\n"
+             . "```";
+        $result = resolver::resolve($raw, $this->candidates());
+
+        $this->assertFalse($result['undecodable']);
+        $this->assertSame(0, $result['discarded']);
+        $this->assertCount(1, $result['suggestions']);
+        $this->assertSame(22, $result['suggestions'][0]['id']);
+    }
+
+    /**
+     * Unfenced JSON preceded by prose that itself contains a brace. Starting the
+     * brace-span search from the first "{" would span from the prose's brace to the
+     * payload's own closing brace and fail; trying successive opening braces finds
+     * the real payload instead.
+     *
+     * @return void
+     */
+    public function test_unfenced_json_after_brace_bearing_prose_resolves(): void {
+        $raw = 'Considering the {content} provided, here is my answer: {"picks":[{"n":1}]}';
+        $result = resolver::resolve($raw, $this->candidates());
+
+        $this->assertFalse($result['undecodable']);
+        $this->assertSame(0, $result['discarded']);
+        $this->assertCount(1, $result['suggestions']);
+        $this->assertSame(11, $result['suggestions'][0]['id']);
+    }
+
+    /**
+     * A fenced block that is valid JSON but lacks a "picks" key must lose to a later
+     * fence that has one. Without the shape check, a worked example that happens to
+     * be valid JSON would win over the real answer.
+     *
+     * @return void
+     */
+    public function test_shape_check_skips_fence_without_picks_key(): void {
+        $raw = "```json\n{\"example\":true}\n```\n"
+             . "```json\n{\"picks\":[{\"n\":2,\"confidence\":0.55,\"why\":\"shape check\"}]}\n```";
+        $result = resolver::resolve($raw, $this->candidates());
+
+        $this->assertFalse($result['undecodable']);
+        $this->assertSame(0, $result['discarded']);
+        $this->assertCount(1, $result['suggestions']);
+        $this->assertSame(22, $result['suggestions'][0]['id']);
     }
 }
