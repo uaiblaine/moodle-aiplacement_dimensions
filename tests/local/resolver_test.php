@@ -267,4 +267,42 @@ final class resolver_test extends \basic_testcase {
         $this->assertCount(1, $result['suggestions']);
         $this->assertSame(22, $result['suggestions'][0]['id']);
     }
+
+    /**
+     * A fenced decoy with {"picks":null} must not mask a real answer in a later fence.
+     *
+     * Without value checking, array_key_exists() accepts {"picks":null}, the decode
+     * returns before trying the later fence, and the real answer is silently masked
+     * while misreported as though the model picked nothing.
+     *
+     * @return void
+     */
+    public function test_decoy_picks_null_does_not_mask_later_answer(): void {
+        $raw = "```json\n{\"picks\":null}\n```\n"
+             . "```json\n{\"picks\":[{\"n\":2,\"why\":\"real one\"}]}\n```";
+        $result = resolver::resolve($raw, $this->candidates());
+
+        $this->assertFalse($result['undecodable']);
+        $this->assertSame(0, $result['discarded']);
+        $this->assertCount(1, $result['suggestions']);
+        $this->assertSame(22, $result['suggestions'][0]['id']);
+        $this->assertSame('real one', $result['suggestions'][0]['why']);
+    }
+
+    /**
+     * A standalone {"picks":null} answer with no better candidate is undecodable.
+     *
+     * {"picks":null} is not a well-formed answer; an array value is required.
+     * This case must be reported as unreadable, not as though the model picked
+     * nothing but was understood.
+     *
+     * @return void
+     */
+    public function test_standalone_picks_null_is_undecodable(): void {
+        $result = resolver::resolve('{"picks":null}', $this->candidates());
+
+        $this->assertTrue($result['undecodable']);
+        $this->assertSame([], $result['suggestions']);
+        $this->assertSame(0, $result['discarded']);
+    }
 }

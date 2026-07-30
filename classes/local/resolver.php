@@ -91,9 +91,9 @@ class resolver {
      * Decode the model output, tolerating fences and surrounding prose.
      *
      * Tries a list of candidate substrings in priority order and accepts the first
-     * that decodes to an array carrying a "picks" key. Requiring that key matters:
-     * a fenced code example can itself be valid JSON, and without the shape check a
-     * worked example would win over the real answer.
+     * that decodes to an array whose "picks" value is itself an array. Checking the
+     * value and not merely the key matters: a decoy fence carrying {"picks":null}
+     * satisfies key-presence, is accepted, and masks a real answer in a later fence.
      *
      * @param string $raw The model's generated content.
      * @return array|null Decoded payload, or null when no payload could be found.
@@ -101,7 +101,7 @@ class resolver {
     private static function decode(string $raw): ?array {
         foreach (self::candidate_payloads($raw) as $candidate) {
             $decoded = json_decode($candidate, true);
-            if (is_array($decoded) && array_key_exists('picks', $decoded)) {
+            if (is_array($decoded) && is_array($decoded['picks'] ?? null)) {
                 return $decoded;
             }
         }
