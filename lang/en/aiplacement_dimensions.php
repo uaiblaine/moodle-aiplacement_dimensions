@@ -25,6 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $string['brancheslabel'] = 'Limit to these branches';
+$string['branchestruncated'] = 'Showing {$a->shown} of {$a->total} root competencies.';
 $string['dimensions:suggest'] = 'Suggest competencies with AI';
 $string['error_actiondisabled'] = 'AI competency suggestions are turned off for this activity or course.';
 $string['error_nosuchframework'] = 'That competency framework is not available.';

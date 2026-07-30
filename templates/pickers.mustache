@@ -19,10 +19,18 @@
 
     Framework select plus the branch checkboxes that scope the request.
 
+    branchesshown, branchestotal and branchestruncated describe the root competencies
+    page fetched for the framework currently on screen: the server paginates at 25,
+    so branchestruncated is true whenever branchestotal is larger than branches.length,
+    and the fieldset then carries a notice instead of silently dropping the rest.
+
     Example context (json):
     {
         "frameworks": [{"id": 1, "shortname": "Framework"}],
-        "branches": [{"id": 9, "shortname": "Root"}]
+        "branches": [{"id": 9, "shortname": "Root"}],
+        "branchesshown": 1,
+        "branchestotal": 1,
+        "branchestruncated": false
     }
 }}
 <form class="aiplacement-dimensions-pickers">
@@ -38,6 +46,13 @@
     {{#branches.length}}
         <fieldset class="mb-3">
             <legend class="h6">{{#str}} brancheslabel, aiplacement_dimensions {{/str}}</legend>
+            {{#branchestruncated}}
+                <p class="aiplacement-dimensions-branches-notice small text-muted">
+                    {{#str}} branchestruncated, aiplacement_dimensions,
+                        {"shown": {{#quote}}{{branchesshown}}{{/quote}}, "total": {{#quote}}{{branchestotal}}{{/quote}}}
+                    {{/str}}
+                </p>
+            {{/branchestruncated}}
             {{#branches}}
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" value="{{id}}"

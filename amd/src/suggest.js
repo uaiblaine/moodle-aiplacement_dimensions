@@ -61,16 +61,37 @@ function(Ajax, Templates, Notification) {
     /**
      * Fetch the root competencies (branches) of one framework.
      *
+     * The server paginates at STRUCTURE_PAGE_SIZE (25) and reports the true count in
+     * `total`, so callers that only look at `items` would silently truncate a framework
+     * with more than 25 roots. Both fields are returned so the caller can tell.
+     *
      * @param {Number} frameworkId The competency framework id.
-     * @return {Promise} Resolves to the array of root competency nodes (id, shortname, ...).
+     * @return {Promise} Resolves to {items: Array, total: Number} of the root competencies.
      */
     var loadBranches = function(frameworkId) {
         return Ajax.call([{
             methodname: 'local_dimensions_browse_structure',
             args: {frameworkid: frameworkId, parentid: 0}
-        }])[0].then(function(structure) {
-            return structure.items;
-        });
+        }])[0];
+    };
+
+    /**
+     * Build the template context shared by the initial render and the branch reload,
+     * including the truncation notice fields consumed by the pickers template.
+     *
+     * @param {Array} frameworks The framework records to list in the select.
+     * @param {Array} branches The root competency nodes of the selected framework.
+     * @param {Number} branchesTotal The true count of root competencies on the server.
+     * @return {Object} The pickers template context.
+     */
+    var buildPickersContext = function(frameworks, branches, branchesTotal) {
+        return {
+            frameworks: frameworks,
+            branches: branches,
+            branchesshown: branches.length,
+            branchestotal: branchesTotal,
+            branchestruncated: branchesTotal > branches.length
+        };
     };
 
     /**
@@ -78,13 +99,14 @@ function(Ajax, Templates, Notification) {
      *
      * @param {Array} frameworks The framework records to list in the select.
      * @param {Array} branches The root competency nodes of the selected framework.
+     * @param {Number} branchesTotal The true count of root competencies on the server.
      * @return {Promise} Resolves once the pickers are in the drawer.
      */
-    var renderPickers = function(frameworks, branches) {
-        return Templates.renderForPromise('aiplacement_dimensions/pickers', {
-            frameworks: frameworks,
-            branches: branches
-        }).then(function(rendered) {
+    var renderPickers = function(frameworks, branches, branchesTotal) {
+        return Templates.renderForPromise(
+            'aiplacement_dimensions/pickers',
+            buildPickersContext(frameworks, branches, branchesTotal)
+        ).then(function(rendered) {
             document.querySelector(SELECTORS.DRAWER).hidden = false;
             document.querySelector(SELECTORS.BODY).innerHTML = rendered.html;
             Templates.runTemplateJS(rendered.js);
@@ -93,10 +115,42 @@ function(Ajax, Templates, Notification) {
     };
 
     /**
+     * Re-render only the branch fieldset for the framework just chosen in the select,
+     * leaving the framework select itself untouched so the user's choice and scroll
+     * position survive the reload.
+     *
+     * @param {Number} frameworkId The competency framework id chosen in the select.
+     * @return {Promise} Resolves once the branch fieldset has been re-rendered.
+     */
+    var reloadBranches = function(frameworkId) {
+        return loadBranches(frameworkId).then(function(structure) {
+            return Templates.renderForPromise(
+                'aiplacement_dimensions/pickers',
+                buildPickersContext([], structure.items, structure.total)
+            );
+        }).then(function(rendered) {
+            var container = document.createElement('div');
+            container.innerHTML = rendered.html;
+            var newfieldset = container.querySelector('fieldset');
+            var body = document.querySelector(SELECTORS.BODY);
+            var oldfieldset = body.querySelector('fieldset');
+            if (oldfieldset) {
+                oldfieldset.remove();
+            }
+            if (newfieldset) {
+                body.querySelector(SELECTORS.RUN).insertAdjacentElement('beforebegin', newfieldset);
+            }
+            Templates.runTemplateJS(rendered.js);
+            return rendered;
+        });
+    };
+
+    /**
      * Open the drawer and render the framework and branch pickers.
      *
-     * Defaults the branch checkboxes to the first framework in the list. Reloading
-     * branches when the user picks a different framework is not wired up in this task.
+     * Defaults the branch checkboxes to the first framework in the list. Picking a
+     * different framework from the select re-fetches and re-renders its branches
+     * through the change listener bound once in init().
      *
      * @param {Number} contextId The activity or course context id.
      * @return {Promise} Resolves once the pickers are in the drawer.
@@ -105,9 +159,9 @@ function(Ajax, Templates, Notification) {
         var frameworks = [];
         return loadFrameworks(contextId).then(function(loadedframeworks) {
             frameworks = loadedframeworks;
-            return frameworks.length ? loadBranches(frameworks[0].id) : [];
-        }).then(function(branches) {
-            return renderPickers(frameworks, branches);
+            return frameworks.length ? loadBranches(frameworks[0].id) : {items: [], total: 0};
+        }).then(function(structure) {
+            return renderPickers(frameworks, structure.items, structure.total);
         });
     };
 
@@ -122,7 +176,7 @@ function(Ajax, Templates, Notification) {
          */
         init: function(cmId, courseId, contextId) {
             /*
-             * cmId, courseId and contextId are captured in this closure on purpose.
+             * CmId, courseId and contextId are captured in this closure on purpose.
              * The click handler below is a plain function, so `this` inside it
              * is the document, not the module — reading this.contextId there
              * would silently yield undefined.
@@ -138,6 +192,22 @@ function(Ajax, Templates, Notification) {
                     e.preventDefault();
                     document.querySelector(SELECTORS.DRAWER).hidden = true;
                 }
+            }, false);
+
+            /*
+             * Delegated and bound once, like the click handler above, so re-rendering
+             * the drawer body never accumulates duplicate listeners on the select.
+             */
+            document.addEventListener('change', function(e) {
+                var select = e.target.closest(SELECTORS.FRAMEWORK);
+                if (!select) {
+                    return;
+                }
+                var frameworkId = parseInt(select.value, 10);
+                if (!frameworkId) {
+                    return;
+                }
+                reloadBranches(frameworkId).catch(Notification.exception);
             }, false);
         }
     };
