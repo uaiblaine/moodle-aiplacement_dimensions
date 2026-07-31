@@ -24,6 +24,20 @@
     so branchestruncated is true whenever branchestotal is larger than branches.length,
     and the fieldset then carries a notice instead of silently dropping the rest.
 
+    The wrapper below is a div, not a form, on purpose. This markup is only ever injected
+    via body.innerHTML into aiplacement_dimensions/drawer's body, which itself lives inside
+    the activity edit page's own <form> (see lib.php: the drawer is a MoodleQuickForm static
+    element placed right before the "competencies" field). A <form> nested inside a live
+    <form> ancestor is invalid HTML, and per the HTML parsing spec a browser parsing such
+    markup through innerHTML silently drops the inner <form> start tag while still inserting
+    its children -- so the wrapping element, and any class or selector on it, would never
+    actually exist in the DOM. This was reproduced directly against Chrome (not inferred from
+    the spec alone): setting innerHTML with a <form> wrapper on a div already nested inside a
+    live <form> element yields child content but no <form> node, while the identical markup
+    parses correctly on a detached node. Nothing here reads this element as a real form
+    (suggest.js reads the select's value and the checkboxes' checked state directly, and
+    never uses FormData or a submit handler), so a div loses no behaviour.
+
     Example context (json):
     {
         "frameworks": [{"id": 1, "shortname": "Framework"}],
@@ -33,7 +47,7 @@
         "branchestruncated": false
     }
 }}
-<form class="aiplacement-dimensions-pickers">
+<div class="aiplacement-dimensions-pickers">
     <div class="mb-3">
         <label class="form-label" for="aiplacement-dimensions-framework">
             {{#str}} frameworklabel, aiplacement_dimensions {{/str}}
@@ -66,4 +80,4 @@
     <button type="button" class="btn btn-primary" data-action="aiplacement-dimensions-run">
         {{#str}} runbutton, aiplacement_dimensions {{/str}}
     </button>
-</form>
+</div>

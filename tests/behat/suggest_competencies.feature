@@ -117,7 +117,7 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
       | enabled | 0 | aiplacement_dimensions |
     When I log in as "teacher1"
     And I am on "Course 1" course homepage with editing mode on
-    And I add a "Page" activity to course "Course 1" section "1"
+    And I add a "page" activity to course "Course 1" section "1"
     Then "Suggest competencies with AI" "button" should not exist
 
   @javascript

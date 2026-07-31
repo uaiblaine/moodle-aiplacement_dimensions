@@ -117,6 +117,13 @@ function(Ajax, Templates, Notification, Str) {
     /**
      * Render the framework and branch pickers into the drawer body and reveal the drawer.
      *
+     * SELECTORS.BODY is always a live descendant of the activity edit page's own <form>
+     * (the drawer is a MoodleQuickForm static element, see lib.php), so
+     * aiplacement_dimensions/pickers must never wrap its content in a <form> of its own:
+     * a browser parsing a nested <form> through innerHTML silently drops the inner start
+     * tag while still inserting its children, leaving the wrapper, and any selector on it,
+     * absent from the DOM with no error anywhere. See the comment in pickers.mustache.
+     *
      * @param {Array} frameworks The framework records to list in the select.
      * @param {Array} branches The root competency nodes of the selected framework.
      * @param {Number} branchesTotal The true count of root competencies on the server.
