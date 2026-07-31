@@ -182,6 +182,36 @@ Three traps:
   A fresh environment also leaves `enabled` unset, which the plugin-enabled gate treats as
   disabled; the test helper sets it.
 
+## Test deploy
+
+`git archive` packages a **commit**, never the working tree — commit first, or your
+edits never enter the zip. Name it `moodle-<component>-<version>-<shortSHA>.zip`, here
+`moodle-aiplacement_dimensions-<version>-<shortSHA>.zip`.
+
+Two parts of the command name different things:
+
+- The **filename** carries the frankenstyle component with a `moodle-` prefix, matching
+  the repo name. `local_dimensions`, `block_dimensions` and `aiplacement_dimensions` all
+  install into a folder called `dimensions`, so naming the zip after the folder made all
+  three collide in `~/Downloads`.
+- The **`--prefix`** is the install directory — the component with its type stripped
+  (`${comp#*_}`), so `dimensions/` here. Moodle validates this one.
+
+The short SHA is required: several slices can share one `version.php` version, and the
+SHA is what keeps two test installs apart.
+
+```sh
+comp=$(grep -oE "\$plugin->component[[:space:]]*=[[:space:]]*'[^']+'" version.php \
+  | grep -oE "'[^']+'" | tr -d "'")
+ver=$(grep -oE '\$plugin->version[[:space:]]*=[[:space:]]*[0-9]+' version.php | grep -oE '[0-9]+')
+sha=$(git rev-parse --short HEAD)
+git archive --format=zip --prefix="${comp#*_}/" HEAD -o ~/Downloads/moodle-$comp-$ver-$sha.zip
+```
+
+Installing this plugin needs `local_dimensions` already present at `>= 2026072801`, and
+the button will not appear until an admin enables the placement and configures a
+`generate_text` provider — see the README.
+
 ## Known gaps
 
 Recorded so nobody rediscovers them as bugs:
