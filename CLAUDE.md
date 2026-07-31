@@ -10,7 +10,7 @@ activity covers. The plugin owns exactly three things: **building the prompt, ca
 and resolving the model's answer to competency IDs.** Linking, searching and tree navigation are
 delegated to web services `local_dimensions` already ships.
 
-It hard-depends on `local_dimensions >= 2026072801` and requires Moodle 5.1
+It hard-depends on `local_dimensions >= 2026072700` and requires Moodle 5.1
 (`$plugin->supported = [501, 503]`). The 5.1 floor is not negotiable: it is when
 `is_action_enabled_in_context()` landed, and without it the per-course and per-activity AI
 opt-outs are silently ignored.
@@ -208,7 +208,7 @@ sha=$(git rev-parse --short HEAD)
 git archive --format=zip --prefix="${comp#*_}/" HEAD -o ~/Downloads/moodle-$comp-$ver-$sha.zip
 ```
 
-Installing this plugin needs `local_dimensions` already present at `>= 2026072801`, and
+Installing this plugin needs `local_dimensions` already present at `>= 2026072700`, and
 the button will not appear until an admin enables the placement and configures a
 `generate_text` provider — see the README.
 

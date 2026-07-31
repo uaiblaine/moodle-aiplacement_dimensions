@@ -25,9 +25,9 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component    = 'aiplacement_dimensions';
-$plugin->version      = 2026072901;
+$plugin->version      = 2026073100;
 $plugin->requires     = 2025100600;
 $plugin->supported    = [501, 503];
 $plugin->maturity     = MATURITY_ALPHA;
-$plugin->release      = 'v0.1';
-$plugin->dependencies = ['local_dimensions' => 2026072801];
+$plugin->release      = 'v0.1.1';
+$plugin->dependencies = ['local_dimensions' => 2026072700];
