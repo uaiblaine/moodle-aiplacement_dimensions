@@ -262,6 +262,11 @@ function(Ajax, Templates, Notification, Str) {
      * errormessage is empty. The text is always written with textContent, never
      * innerHTML, since it can carry provider-supplied content.
      *
+     * The three .then() calls below are siblings in a single flat chain, not one
+     * nested inside another: response and errormessage are threaded across them
+     * through the closures declared at the top of this function instead of being
+     * resolved from inside another .then()'s callback body.
+     *
      * @param {Number} cmId The course module id, or 0 for an activity not yet created.
      * @param {Number} courseId The course id.
      * @return {Promise} Resolves when the suggestions are rendered, or resolves
@@ -276,6 +281,12 @@ function(Ajax, Templates, Notification, Str) {
             return parseInt(input.value, 10);
         });
 
+        // Set by the first .then() below and read by the later links in the same
+        // chain, so the ajax response and its resolved error message never need
+        // a second .then() nested inside the first to reach each other.
+        var response = null;
+        var errormessage = '';
+
         return Ajax.call([{
             methodname: 'aiplacement_dimensions_suggest_competencies',
             args: {
@@ -285,48 +296,43 @@ function(Ajax, Templates, Notification, Str) {
                 rootids: branches,
                 content: readContent()
             }
-        }])[0].then(function(response) {
+        }])[0].then(function(ajaxresponse) {
+            response = ajaxresponse;
+            if (token !== suggestRequestToken || response.success) {
+                // Superseded, or nothing to resolve: either way there is no
+                // provider error message to fetch.
+                return '';
+            }
+            if (response.errormessage) {
+                return response.errormessage;
+            }
+            return Str.get_string('error_provider', 'aiplacement_dimensions', response.errorcode);
+        }).then(function(resolvedmessage) {
+            errormessage = resolvedmessage;
             if (token !== suggestRequestToken) {
                 // A newer Suggest click started while this request was in flight.
                 return response;
             }
-
-            var messagePromise;
-            if (response.success) {
-                messagePromise = Promise.resolve('');
-            } else if (response.errormessage) {
-                messagePromise = Promise.resolve(response.errormessage);
-            } else {
-                messagePromise = Str.get_string('error_provider', 'aiplacement_dimensions', response.errorcode);
-            }
-
-            // Captured by both .then() below so the second can use what the first resolved,
-            // without nesting one promise chain inside another.
-            var errormessage = '';
-
-            return messagePromise.then(function(resolvedmessage) {
-                errormessage = resolvedmessage;
-                return Templates.renderForPromise(
-                    'aiplacement_dimensions/suggestions',
-                    buildSuggestionsContext(response)
-                );
-            }).then(function(rendered) {
-                if (token !== suggestRequestToken) {
-                    return rendered;
-                }
-                var body = document.querySelector(SELECTORS.BODY);
-                body.innerHTML = rendered.html;
-                Templates.runTemplateJS(rendered.js);
-                if (!response.success) {
-                    var errorRegion = body.querySelector(
-                        '[data-region="aiplacement-dimensions-providererror"]'
-                    );
-                    if (errorRegion) {
-                        errorRegion.textContent = errormessage;
-                    }
-                }
+            return Templates.renderForPromise(
+                'aiplacement_dimensions/suggestions',
+                buildSuggestionsContext(response)
+            );
+        }).then(function(rendered) {
+            if (token !== suggestRequestToken) {
                 return rendered;
-            });
+            }
+            var body = document.querySelector(SELECTORS.BODY);
+            body.innerHTML = rendered.html;
+            Templates.runTemplateJS(rendered.js);
+            if (!response.success) {
+                var errorRegion = body.querySelector(
+                    '[data-region="aiplacement-dimensions-providererror"]'
+                );
+                if (errorRegion) {
+                    errorRegion.textContent = errormessage;
+                }
+            }
+            return rendered;
         });
     };
 

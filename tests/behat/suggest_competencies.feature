@@ -1,4 +1,4 @@
-@core_ai @aiplacement_dimensions
+@core_ai @aiplacement @aiplacement_dimensions
 Feature: AI competency suggestions are offered only when they are allowed, and only take effect once saved
   In order to keep AI use under site control and to only ever change what the user explicitly saves
   As a teacher
@@ -89,7 +89,15 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
   Scenario: The button is absent when AI tools are disabled at course level
     # The single deviation from the positive scenario is turning off the course-level AI
     # toggle; the Background's provider and enabled placement are otherwise untouched.
-    Given I log in as "teacher1"
+    # The "Allow AI tools for this course" field is only rendered by course/edit_form.php
+    # when aiplacement_courseassist or aiplacement_editor is enabled -- that gate does not
+    # check any other placement, including this one. Enabling courseassist here is only
+    # what makes the field reachable in the UI; the value it writes, course->enableaitools,
+    # is what core_ai\manager::is_action_enabled_in_context() reads for every placement,
+    # so it is genuinely this plugin's own gate being exercised below.
+    Given the following config values are set as admin:
+      | enabled | 1 | aiplacement_courseassist |
+    And I log in as "teacher1"
     And I am on the "Course 1" "course editing" page
     When I set the following fields to these values:
       | Allow AI tools for this course | No |
@@ -109,7 +117,7 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
       | enabled | 0 | aiplacement_dimensions |
     When I log in as "teacher1"
     And I am on "Course 1" course homepage with editing mode on
-    And I add a "Page" to section "1"
+    And I add a "Page" activity to course "Course 1" section "1"
     Then "Suggest competencies with AI" "button" should not exist
 
   @javascript
@@ -129,6 +137,10 @@ Feature: AI competency suggestions are offered only when they are allowed, and o
       | Root      | root1    | fw1                 |
     When I log in as "teacher1"
     And I am on the "Assignment" "assign activity editing" page
+    # The button is inserted into the "Competencies" fieldset (see lib.php), which the mod
+    # form renders collapsed by default -- the same reason tool_lp's own course_competencies
+    # behat coverage has to expand it before it can set the "Course competencies" field.
+    And I expand all fieldsets
     And I press "Suggest competencies with AI"
     Then "#aiplacement-dimensions-framework" "css_element" should exist
     And I should see "Framework" in the "#aiplacement-dimensions-framework" "css_element"
