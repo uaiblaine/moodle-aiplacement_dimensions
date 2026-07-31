@@ -37,7 +37,7 @@ final class suggest_competencies_test extends \advanced_testcase {
      * @return void
      */
     private function mock_manager(string $generated, bool $success = true): void {
-        // response_base::__construct() (ai/classes/aiactions/responses/response_base.php:58) throws a
+        // The response_base::__construct() (ai/classes/aiactions/responses/response_base.php:58) throws a
         // coding_exception when success is false unless BOTH errorcode and error (the error name) are
         // non-empty; error is required here for that reason even though this test only asserts errorcode.
         $response = new \core_ai\aiactions\responses\response_generate_text(

@@ -21,6 +21,14 @@
  * lang_test PHPUnit test asserts every referenced key exists in this component, and the
  * validate CI step enforces alphabetical key order independently for each language file.
  *
+ * The 'promptinstruction' string below is deliberately left in English, unlike every
+ * other string in this file. This value is not displayed to any user: it is the literal
+ * instruction text sent to the AI model, and the model's reply is parsed against a JSON
+ * schema ("picks", "n", "confidence", "why") that stays in English regardless of locale
+ * (see classes/local/resolver.php). Translating the prose around that schema would risk
+ * drifting the instruction from the parser's expectations without any of it ever being
+ * tested, for a string no teacher or student ever sees.
+ *
  * @package    aiplacement_dimensions
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -46,14 +54,6 @@ $string['nocandidates'] = 'A estrutura de competências selecionada não tem com
 $string['nosuggestions'] = 'O modelo não encontrou uma correspondência clara nesta estrutura.';
 $string['pluginname'] = 'Sugestões de competências com IA';
 $string['privacy:metadata'] = 'O posicionamento de sugestões de competências com IA não armazena nenhum dado pessoal. O conteúdo da atividade é enviado ao provedor de IA configurado, que registra a solicitação no subsistema de IA do núcleo.';
-/*
- * Deliberately left in English, unlike every other string in this file. This value is not
- * displayed to any user: it is the literal instruction text sent to the AI model, and the
- * model's reply is parsed against a JSON schema ("picks", "n", "confidence", "why") that stays
- * in English regardless of locale (see classes/local/resolver.php). Translating the prose
- * around that schema would risk drifting the instruction from the parser's expectations without
- * any of it ever being tested, for a string no teacher or student ever sees.
- */
 $string['promptinstruction'] = 'You are mapping educational content to competencies.
 
 CANDIDATE COMPETENCIES (choose only from this numbered list):

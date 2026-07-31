@@ -14,7 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Library callbacks for the aiplacement_dimensions plugin.
+ *
+ * @package    aiplacement_dimensions
+ * @copyright  2026 Anderson Blaine
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 /**
  * Add the AI suggestion button to the activity settings form.
