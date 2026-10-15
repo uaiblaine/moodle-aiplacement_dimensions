@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [v0.1.2] - Unreleased
+
+### Changed
+
+- `local_dimensions` now has one branch per Moodle version, numbered in that version's
+  namespace (5.1 `20251006XX`, 5.2 `20260420XX`, 5.3 `20261005XX`), below its old date-numbered
+  releases. The declared dependency moves from `2026072700` to `2025100600`, the first 5.1
+  release, which every branch meets and which has both web services this placement calls.
+- CI: one job per supported Moodle version, each installing `local_dimensions` from the branch
+  for that version; a 5.3 job (the full PHP x DB matrix) is added, so the top of the declared
+  range is tested.
+
 ## [v0.1.1] - 2026-07-31
 
 ### Fixed

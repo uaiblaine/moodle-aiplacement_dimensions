@@ -49,8 +49,9 @@ toggle and the missing provider.
 ## Requirements
 
 - Moodle 5.1, 5.2 or 5.3 (`$plugin->supported = [501, 503]`).
-- [`local_dimensions`](https://github.com/uaiblaine/moodle-local_dimensions), pinned to version
-  `2026072801` or later. This plugin declares it as a hard dependency (`$plugin->dependencies`),
+- [`local_dimensions`](https://github.com/uaiblaine/moodle-local_dimensions), from its branch
+  for the site's Moodle version (`MOODLE_501_STABLE`, `MOODLE_502_STABLE`, or `main` for 5.3);
+  the declared minimum is `2025100600`, the first 5.1 release. This plugin declares it as a hard dependency (`$plugin->dependencies`),
   so Moodle will refuse to install `aiplacement_dimensions` without it present.
 
 ## Capability

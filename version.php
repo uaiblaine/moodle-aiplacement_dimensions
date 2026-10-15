@@ -25,9 +25,11 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component    = 'aiplacement_dimensions';
-$plugin->version      = 2026073100;
+$plugin->version      = 2026101500;
 $plugin->requires     = 2025100600;
 $plugin->supported    = [501, 503];
 $plugin->maturity     = MATURITY_ALPHA;
-$plugin->release      = 'v0.1.1';
-$plugin->dependencies = ['local_dimensions' => 2026072700];
+$plugin->release      = 'v0.1.2';
+// The lowest number of local_dimensions' per-Moodle-version branches (MOODLE_501_STABLE's first
+// release): every branch from there has the two web services this placement calls.
+$plugin->dependencies = ['local_dimensions' => 2025100600];
