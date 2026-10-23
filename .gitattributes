@@ -1,5 +1,7 @@
 # Release hygiene — `git archive HEAD` builds the install zip, so every tracked
 # path lands in the package unless it is export-ignore'd here.
+# lang/pt_br stays in git but not in the zip: the plugins directory accepts only
+# English strings in a package, and translations reach sites through AMOS.
 #
 # Verify with:  git check-attr export-ignore -- <path>
 
@@ -10,3 +12,5 @@ docs                  export-ignore
 .gitattributes        export-ignore
 CLAUDE.md             export-ignore
 /.mdlshield          export-ignore
+/lang/pt_br           export-ignore
+/mutations            export-ignore

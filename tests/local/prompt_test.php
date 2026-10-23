@@ -73,6 +73,27 @@ final class prompt_test extends \basic_testcase {
     }
 
     /**
+     * The prompt carries each candidate's short name and the content, and neither its id nor its idnumber.
+     *
+     * The README's "What is sent to the AI provider" section promises exactly this, and the
+     * plugins directory asks that what reaches an external service be documented. The short name
+     * and the content are asserted present first, so the absence of the id and the idnumber is
+     * measured against a prompt that does carry the candidate.
+     *
+     * @return void
+     */
+    public function test_the_prompt_carries_short_names_and_content_only(): void {
+        $row = ['id' => 4711, 'idnumber' => 'IDN-PRIVATE-9', 'shortname' => 'Gamma'];
+
+        $result = prompt::build([$row], 'Lesson body text');
+
+        $this->assertStringContainsString('1. Gamma', $result['text']);
+        $this->assertStringContainsString('Lesson body text', $result['text']);
+        $this->assertStringNotContainsString('IDN-PRIVATE-9', $result['text']);
+        $this->assertStringNotContainsString('4711', $result['text']);
+    }
+
+    /**
      * An empty candidate set is not an error.
      *
      * @return void
