@@ -53,7 +53,7 @@ $string['frameworklabel'] = 'Estrutura de competências';
 $string['nocandidates'] = 'A estrutura de competências selecionada não tem competências para classificar.';
 $string['nosuggestions'] = 'O modelo não encontrou uma correspondência clara nesta estrutura.';
 $string['pluginname'] = 'Sugestões de competências com IA';
-$string['privacy:metadata'] = 'O posicionamento de sugestões de competências com IA não armazena nenhum dado pessoal. O conteúdo da atividade é enviado ao provedor de IA configurado, que registra a solicitação no subsistema de IA do núcleo.';
+$string['privacy:metadata'] = 'O posicionamento de sugestões de competências com IA não armazena nenhum dado pessoal. Ele envia a descrição da atividade e os nomes das competências candidatas ao provedor de IA configurado por meio do subsistema de IA do núcleo, que registra a solicitação e a resposta.';
 $string['promptinstruction'] = 'You are mapping educational content to competencies.
 
 CANDIDATE COMPETENCIES (choose only from this numbered list):

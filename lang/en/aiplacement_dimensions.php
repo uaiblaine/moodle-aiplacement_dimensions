@@ -41,7 +41,7 @@ $string['frameworklabel'] = 'Competency framework';
 $string['nocandidates'] = 'The selected framework has no competencies to classify against.';
 $string['nosuggestions'] = 'The model did not find a clear match in this framework.';
 $string['pluginname'] = 'AI competency suggestions';
-$string['privacy:metadata'] = 'The AI competency suggestions placement does not store any personal data. Activity content is sent to the configured AI provider, which records the request under the core AI subsystem.';
+$string['privacy:metadata'] = 'The AI competency suggestions placement does not store any personal data. It sends the activity description and the names of the candidate competencies to the configured AI provider through the core AI subsystem, which records the request and its answer.';
 $string['promptinstruction'] = 'You are mapping educational content to competencies.
 
 CANDIDATE COMPETENCIES (choose only from this numbered list):

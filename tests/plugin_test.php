@@ -49,4 +49,25 @@ final class plugin_test extends \advanced_testcase {
         $this->assertArrayHasKey('aiplacement/dimensions:suggest', $caps);
         $this->assertSame(CONTEXT_MODULE, (int) $caps['aiplacement/dimensions:suggest']['contextlevel']);
     }
+
+    /**
+     * The README states the limits the code applies to what reaches the AI provider.
+     *
+     * Administrators judge from the README's "What is sent to the AI provider" section how much
+     * activity content leaves the site and how many competency names go with it. Each figure is
+     * derived from the constant the service applies, so changing a limit without the README fails
+     * here, and a README figure the code no longer applies fails as well.
+     *
+     * @return void
+     */
+    public function test_the_readme_states_the_limits_of_what_is_sent(): void {
+        $readme = file_get_contents(dirname(__DIR__) . '/README.md');
+        $this->assertNotFalse($readme);
+
+        $this->assertStringContainsString('## What is sent to the AI provider', $readme);
+        $content = number_format(\aiplacement_dimensions\external\suggest_competencies::MAX_CONTENT) . ' characters';
+        $this->assertStringContainsString($content, $readme);
+        $budget = 'at most ' . \aiplacement_dimensions\local\prompt::DEFAULT_BUDGET . ' of them';
+        $this->assertStringContainsString($budget, $readme);
+    }
 }
